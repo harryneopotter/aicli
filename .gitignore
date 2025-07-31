@@ -1,0 +1,18 @@
+# Ignore hidden directories
+.appdata/
+.not-needed/
+.saarthi/
+.vscode/
+.mcp/
+
+# Ignore db files
+*.db
+
+# Ignore specific files in tabby-ai-agent
+tabby-ai-agent/PLAN.md
+tabby-ai-agent/node_modules/
+tabby-ai-agent/dist/
+tabby-ai-agent/*.log
+
+# General ignores
+*.zip

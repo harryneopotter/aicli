@@ -1,0 +1,15 @@
+# AI Agent Plugin Configuration
+plugins:
+  - tabby-ai-agent
+
+aiAgent:
+  defaultModel: gemma3
+  ollamaEndpoint: http://localhost:11434
+  ollamaModel: gemma2:2b
+  autoResponse: true
+  contextWindow: 20
+  enableMCP: true
+  tokenOptimization:
+    compressContext: true
+    maxFileSize: 10000
+    smartTruncation: true

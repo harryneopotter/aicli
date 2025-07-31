@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "aiAgent": {
+      "type": "object",
+      "title": "AI Agent Settings",
+      "properties": {
+        "defaultModel": {
+          "type": "string",
+          "enum": ["gemma3", "gemini-api"],
+          "default": "gemma3",
+          "title": "Default AI Model",
+          "description": "Which AI model to use by default"
+        },
+        "ollamaEndpoint": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "title": "Ollama API Endpoint",
+          "description": "Local Ollama server endpoint"
+        },
+        "ollamaModel": {
+          "type": "string",
+          "default": "gemma2:2b",
+          "title": "Ollama Model Name",
+          "description": "Ollama model to use (gemma2:2b, llama3, etc.)"
+        },
+        "geminiApiKey": {
+          "type": "string",
+          "title": "Gemini API Key",
+          "description": "Your Google Gemini API key for cloud AI",
+          "format": "password"
+        },
+        "geminiModel": {
+          "type": "string",
+          "default": "gemini-1.5-pro",
+          "title": "Gemini Model",
+          "description": "Gemini model variant to use"
+        },
+        "autoResponse": {
+          "type": "boolean",
+          "default": true,
+          "title": "Auto-respond to Natural Language",
+          "description": "Automatically respond to non-command input"
+        },
+        "contextWindow": {
+          "type": "number",
+          "default": 20,
+          "minimum": 5,
+          "maximum": 100,
+          "title": "Context History Size",
+          "description": "Number of previous exchanges to remember"
+        },
+        "enableMCP": {
+          "type": "boolean",
+          "default": true,
+          "title": "Enable MCP Tools",
+          "description": "Allow AI to use Model Context Protocol tools"
+        },
+        "mcpServers": {
+          "type": "array",
+          "title": "Enabled MCP Servers",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "enabled": {"type": "boolean", "default": true},
+              "config": {"type": "object"}
+            }
+          },
+          "default": [
+            {"name": "filesystem", "enabled": true},
+            {"name": "git", "enabled": true},
+            {"name": "memory", "enabled": true},
+            {"name": "brave-search", "enabled": false}
+          ]
+        },
+        "tokenOptimization": {
+          "type": "object",
+          "title": "Token Usage Optimization",
+          "properties": {
+            "compressContext": {
+              "type": "boolean",
+              "default": true,
+              "title": "Compress Context",
+              "description": "Use compressed context summaries to reduce tokens"
+            },
+            "maxFileSize": {
+              "type": "number",
+              "default": 10000,
+              "title": "Max File Read Size (chars)",
+              "description": "Maximum characters to read from files"
+            },
+            "smartTruncation": {
+              "type": "boolean",
+              "default": true,
+              "title": "Smart Content Truncation",
+              "description": "Intelligently truncate large outputs"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+# Ignore plan file
+PLAN.md
+
+# Ignore hidden directories
+.mcp/
+
+# Ignore db files
+*.db
+
+# General ignores
+node_modules/
+dist/
+*.log

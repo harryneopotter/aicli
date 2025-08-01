@@ -6,52 +6,53 @@
       "type": "object",
       "title": "AI Agent Settings",
       "properties": {
-        "defaultModel": {
+        "provider": {
           "type": "string",
-          "enum": ["gemma3", "gemini-api"],
-          "default": "gemma3",
-          "title": "Default AI Model",
-          "description": "Which AI model to use by default"
+          "enum": ["ollama", "gemini", "openai", "anthropic"],
+          "default": "ollama",
+          "title": "AI Provider",
+          "description": "Which AI provider to use"
         },
-        "ollamaEndpoint": {
+        "apiUrl": {
           "type": "string",
           "default": "http://localhost:11434",
-          "title": "Ollama API Endpoint",
-          "description": "Local Ollama server endpoint"
+          "title": "API Endpoint",
+          "description": "AI provider API endpoint URL"
         },
-        "ollamaModel": {
+        "model": {
           "type": "string",
-          "default": "gemma2:2b",
-          "title": "Ollama Model Name",
-          "description": "Ollama model to use (gemma2:2b, llama3, etc.)"
+          "default": "llama3.2",
+          "title": "Model Name",
+          "description": "AI model to use (e.g., llama3.2, gpt-4, claude-3, gemini-pro)"
         },
-        "geminiApiKey": {
+        "apiKey": {
           "type": "string",
-          "title": "Gemini API Key",
-          "description": "Your Google Gemini API key for cloud AI",
+          "title": "API Key",
+          "description": "API key for cloud AI providers",
           "format": "password"
         },
-        "geminiModel": {
+        "defaultMode": {
           "type": "string",
-          "default": "gemini-1.5-pro",
-          "title": "Gemini Model",
-          "description": "Gemini model variant to use"
+          "enum": ["shell", "ai"],
+          "default": "shell",
+          "title": "Default Terminal Mode",
+          "description": "Default mode when opening new terminals"
         },
         "autoResponse": {
           "type": "boolean",
           "default": true,
           "title": "Auto-respond to Natural Language",
-          "description": "Automatically respond to non-command input"
+          "description": "Automatically respond to non-command input in shell mode"
         },
         "contextWindow": {
           "type": "number",
-          "default": 20,
-          "minimum": 5,
-          "maximum": 100,
-          "title": "Context History Size",
-          "description": "Number of previous exchanges to remember"
+          "default": 4096,
+          "minimum": 1024,
+          "maximum": 32768,
+          "title": "Context Window Size",
+          "description": "Maximum context window size in tokens"
         },
-        "enableMCP": {
+        "enableMCPTools": {
           "type": "boolean",
           "default": true,
           "title": "Enable MCP Tools",
@@ -59,43 +60,236 @@
         },
         "mcpServers": {
           "type": "array",
-          "title": "Enabled MCP Servers",
+          "title": "MCP Server Configurations",
           "items": {
             "type": "object",
             "properties": {
-              "name": {"type": "string"},
-              "enabled": {"type": "boolean", "default": true},
-              "config": {"type": "object"}
-            }
+              "name": {
+                "type": "string",
+                "title": "Server Name",
+                "description": "Unique identifier for the MCP server"
+              },
+              "command": {
+                "type": "string",
+                "title": "Command",
+                "description": "Command to start the MCP server"
+              },
+              "args": {
+                "type": "array",
+                "items": {"type": "string"},
+                "title": "Arguments",
+                "description": "Command line arguments for the server"
+              },
+              "description": {
+                "type": "string",
+                "title": "Description",
+                "description": "Human-readable description of the server"
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "title": "Enabled",
+                "description": "Whether this server should be started"
+              },
+              "priority": {
+                "type": "number",
+                "default": 5,
+                "minimum": 1,
+                "maximum": 10,
+                "title": "Priority",
+                "description": "Server priority for tool execution (lower = higher priority)"
+              },
+              "timeout": {
+                "type": "number",
+                "default": 10000,
+                "minimum": 1000,
+                "maximum": 60000,
+                "title": "Connection Timeout (ms)",
+                "description": "Timeout for server connection in milliseconds"
+              },
+              "retryCount": {
+                "type": "number",
+                "default": 3,
+                "minimum": 0,
+                "maximum": 10,
+                "title": "Retry Count",
+                "description": "Number of connection retry attempts"
+              },
+              "env": {
+                "type": "object",
+                "title": "Environment Variables",
+                "description": "Environment variables for the server process",
+                "additionalProperties": {"type": "string"}
+              }
+            },
+            "required": ["name", "command", "args", "description"]
           },
           "default": [
-            {"name": "filesystem", "enabled": true},
-            {"name": "git", "enabled": true},
-            {"name": "memory", "enabled": true},
-            {"name": "brave-search", "enabled": false}
+            {
+              "name": "filesystem",
+              "command": "npx",
+              "args": ["@modelcontextprotocol/server-filesystem"],
+              "description": "File system operations",
+              "enabled": true,
+              "priority": 1
+            },
+            {
+              "name": "git",
+              "command": "npx",
+              "args": ["@modelcontextprotocol/server-git"],
+              "description": "Git operations",
+              "enabled": true,
+              "priority": 2
+            },
+            {
+              "name": "brave-search",
+              "command": "npx",
+              "args": ["@modelcontextprotocol/server-brave-search"],
+              "description": "Web search capabilities",
+              "enabled": false,
+              "priority": 3,
+              "env": {"BRAVE_API_KEY": ""}
+            }
           ]
         },
-        "tokenOptimization": {
+        "performance": {
           "type": "object",
-          "title": "Token Usage Optimization",
+          "title": "Performance Settings",
           "properties": {
-            "compressContext": {
-              "type": "boolean",
-              "default": true,
-              "title": "Compress Context",
-              "description": "Use compressed context summaries to reduce tokens"
-            },
-            "maxFileSize": {
+            "maxResponseTime": {
               "type": "number",
-              "default": 10000,
-              "title": "Max File Read Size (chars)",
-              "description": "Maximum characters to read from files"
+              "default": 30000,
+              "minimum": 5000,
+              "maximum": 120000,
+              "title": "Max Response Time (ms)",
+              "description": "Maximum time to wait for AI response"
             },
-            "smartTruncation": {
+            "enableCaching": {
               "type": "boolean",
               "default": true,
-              "title": "Smart Content Truncation",
-              "description": "Intelligently truncate large outputs"
+              "title": "Enable Response Caching",
+              "description": "Cache AI responses for similar queries"
+            },
+            "cacheSize": {
+              "type": "number",
+              "default": 100,
+              "minimum": 10,
+              "maximum": 1000,
+              "title": "Cache Size",
+              "description": "Maximum number of cached responses"
+            }
+          }
+        },
+        "context": {
+          "type": "object",
+          "title": "Context Management",
+          "properties": {
+            "maxHistorySize": {
+              "type": "number",
+              "default": 50,
+              "minimum": 10,
+              "maximum": 200,
+              "title": "Max History Size",
+              "description": "Maximum number of commands/outputs to remember"
+            },
+            "includeGitStatus": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Git Status",
+              "description": "Include git repository information in context"
+            },
+            "includeProjectInfo": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Project Info",
+              "description": "Include project type and package information"
+            },
+            "maxOutputLength": {
+              "type": "number",
+              "default": 2000,
+              "minimum": 500,
+              "maximum": 10000,
+              "title": "Max Output Length",
+              "description": "Maximum characters to include from command outputs"
+            }
+          }
+        },
+        "ui": {
+          "type": "object",
+          "title": "User Interface Settings",
+          "properties": {
+            "showModeIndicator": {
+              "type": "boolean",
+              "default": true,
+              "title": "Show Mode Indicator",
+              "description": "Display current mode in terminal"
+            },
+            "showContextPanel": {
+              "type": "boolean",
+              "default": false,
+              "title": "Show Context Panel by Default",
+              "description": "Show context information panel by default"
+            },
+            "enableAnimations": {
+              "type": "boolean",
+              "default": true,
+              "title": "Enable Animations",
+              "description": "Enable UI animations and transitions"
+            },
+            "highContrast": {
+              "type": "boolean",
+              "default": false,
+              "title": "High Contrast Mode",
+              "description": "Use high contrast colors for better accessibility"
+            }
+          }
+        },
+        "accessibility": {
+          "type": "object",
+          "title": "Accessibility Settings",
+          "properties": {
+            "announceMode Changes": {
+              "type": "boolean",
+              "default": true,
+              "title": "Announce Mode Changes",
+              "description": "Announce mode changes to screen readers"
+            },
+            "verboseDescriptions": {
+              "type": "boolean",
+              "default": false,
+              "title": "Verbose Descriptions",
+              "description": "Provide detailed descriptions for screen readers"
+            },
+            "keyboardShortcuts": {
+              "type": "boolean",
+              "default": true,
+              "title": "Enable Keyboard Shortcuts",
+              "description": "Enable keyboard shortcuts for mode switching"
+            }
+          }
+        },
+        "debug": {
+          "type": "object",
+          "title": "Debug Settings",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "title": "Enable Debug Mode",
+              "description": "Enable debug logging and additional information"
+            },
+            "logLevel": {
+              "type": "string",
+              "enum": ["error", "warn", "info", "debug"],
+              "default": "info",
+              "title": "Log Level",
+              "description": "Minimum log level to display"
+            },
+            "showPerformanceMetrics": {
+              "type": "boolean",
+              "default": false,
+              "title": "Show Performance Metrics",
+              "description": "Display response times and performance information"
             }
           }
         }

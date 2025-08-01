@@ -226,6 +226,8 @@ export class MCPClientService {
         return
       }
       
+      this.validateServerConfig(server);
+      
       // Prepare environment variables
       const env = {
         ...process.env,

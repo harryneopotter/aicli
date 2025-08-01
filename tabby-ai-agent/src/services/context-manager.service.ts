@@ -1,10 +1,9 @@
 import { Injectable } from '@angular/core';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { simpleGit, SimpleGit } from 'simple-git';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const execAsync = promisify(exec);
+const git: SimpleGit = simpleGit();
 
 interface ContextCache {
   workingDir: string;
@@ -92,23 +91,11 @@ export class ContextManagerService {
 
   private async getGitStatus(): Promise<string | null> {
     try {
-      const { stdout } = await execAsync('git status --porcelain', { 
-        cwd: this.contextCache.workingDir,
-        timeout: 5000 
-      });
-      
-      if (stdout.trim()) {
-        const { stdout: branch } = await execAsync('git branch --show-current', {
-          cwd: this.contextCache.workingDir,
-          timeout: 3000
-        });
-        return `Branch: ${branch.trim()}, Changes: ${stdout.split('\n').length - 1} files`;
+      const status = await git.status();
+      if (status.files.length > 0) {
+        return `Branch: ${status.current}, Changes: ${status.files.length} files`;
       } else {
-        const { stdout: branch } = await execAsync('git branch --show-current', {
-          cwd: this.contextCache.workingDir,
-          timeout: 3000
-        });
-        return `Branch: ${branch.trim()}, Clean working tree`;
+        return `Branch: ${status.current}, Clean working tree`;
       }
     } catch (error) {
       return null; // Not a git repository or git not available

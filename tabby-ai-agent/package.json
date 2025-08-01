@@ -32,6 +32,7 @@
     "node-fetch": "^3.3.0",
     "rxjs": "^7.8.2",
     "sanitize-html": "^2.11.0",
+    "simple-git": "^3.28.0",
     "tabby-core": "^1.0.0",
     "tabby-terminal": "^1.0.0",
     "ws": "^8.13.0"

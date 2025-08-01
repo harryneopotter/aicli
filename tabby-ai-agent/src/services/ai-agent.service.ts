@@ -210,33 +210,37 @@ export class AIAgentService {
     const endpoint = this.config.store.aiAgent?.ollamaEndpoint || 'http://localhost:11434';
     const model = this.config.store.aiAgent?.ollamaModel || 'llama3.2';
     
-    try {
-      const response = await fetch(`${endpoint}/api/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: model,
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
-          stream: false,
-          options: {
-            temperature: 0.7,
-            top_p: 0.9,
-            max_tokens: this.config.store.aiAgent?.contextWindow ? Math.floor(this.config.store.aiAgent.contextWindow * 0.3) : 1000
-          }
-        }),
-        // Note: AbortSignal.timeout not available in older Node versions
-         // Using manual timeout handling instead
-      });
+    const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
 
-      if (!response.ok) {
-        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
-      }
+      try {
+        const response = await fetch(`${endpoint}/api/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: messages.map(m => ({ role: m.role, content: m.content })),
+            stream: false,
+            options: {
+              temperature: 0.7,
+              top_p: 0.9,
+              max_tokens: this.config.store.aiAgent?.contextWindow ? Math.floor(this.config.store.aiAgent.contextWindow * 0.3) : 1000
+            }
+          }),
+          signal: controller.signal
+        });
 
-      const data = await response.json();
-      return (data as any).message?.content || 'No response from Ollama';
-    } catch (error: any) {
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return (data as any).message?.content || 'No response from Ollama';
+      } catch (error: any) {
        if (error.name === 'AbortError') {
          throw new Error('Ollama request timed out. Please check if Ollama is running.');
        }
@@ -245,60 +249,64 @@ export class AIAgentService {
   }
 
   private async callGeminiAPI(messages: AIMessage[], tools: any[]): Promise<string> {
-    const apiKey = this.config.store.aiAgent?.geminiApiKey;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('Gemini API key not configured. Please set it in the plugin settings.');
     }
     
     const model = this.config.store.aiAgent?.geminiModel || 'gemini-1.5-flash';
     
-    try {
-      // Convert messages to Gemini format
-      const geminiMessages = messages.filter(m => m.role !== 'system').map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }]
-      }));
-      
-      // Add system prompt as first user message if exists
-      const systemMessage = messages.find(m => m.role === 'system');
-      if (systemMessage) {
-        geminiMessages.unshift({
-          role: 'user',
-          parts: [{ text: `System: ${systemMessage.content}` }]
+    const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
+
+      try {
+        // Convert messages to Gemini format
+        const geminiMessages = messages.filter(m => m.role !== 'system').map(m => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }]
+        }));
+        
+        // Add system prompt as first user message if exists
+        const systemMessage = messages.find(m => m.role === 'system');
+        if (systemMessage) {
+          geminiMessages.unshift({
+            role: 'user',
+            parts: [{ text: `System: ${systemMessage.content}` }]
+          });
+        }
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: geminiMessages,
+            generationConfig: {
+              temperature: 0.7,
+              topP: 0.9,
+              maxOutputTokens: this.config.store.aiAgent?.contextWindow ? Math.floor(this.config.store.aiAgent.contextWindow * 0.3) : 1000
+            }
+          }),
+          signal: controller.signal
         });
-      }
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: geminiMessages,
-          generationConfig: {
-            temperature: 0.7,
-            topP: 0.9,
-            maxOutputTokens: this.config.store.aiAgent?.contextWindow ? Math.floor(this.config.store.aiAgent.contextWindow * 0.3) : 1000
-          }
-        }),
-        // Note: AbortSignal.timeout not available in older Node versions
-         // Using manual timeout handling instead
-      });
+        clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Gemini API error: ${response.status} ${(errorData as any).error?.message || response.statusText}`);
-      }
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(`Gemini API error: ${response.status} ${(errorData as any).error?.message || response.statusText}`);
+        }
 
-      const data = await response.json();
-      const content = (data as any).candidates?.[0]?.content?.parts?.[0]?.text;
-      
-      if (!content) {
-        throw new Error('No response content from Gemini API');
-      }
-      
-      return content;
-    } catch (error: any) {
+        const data = await response.json();
+        const content = (data as any).candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (!content) {
+          throw new Error('No response content from Gemini API');
+        }
+        
+        return content;
+      } catch (error: any) {
        if (error.name === 'AbortError') {
          throw new Error('Gemini request timed out. Please check your internet connection.');
        }

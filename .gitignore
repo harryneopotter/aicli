@@ -4,6 +4,7 @@
 .saarthi/
 .vscode/
 .mcp/
+update/
 
 # Ignore db files
 *.db

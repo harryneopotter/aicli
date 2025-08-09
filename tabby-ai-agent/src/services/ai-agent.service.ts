@@ -54,6 +54,7 @@ export class AIAgentService {
     this.initializeHealthCheck();
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
   async processNaturalLanguage(input: string, _context?: unknown, _tools?: unknown[]): Promise<string> {
     const startTime = Date.now();
     this.performanceMetrics.totalRequests++;
@@ -207,6 +208,7 @@ export class AIAgentService {
     return prompt;
   }
 
+  // eslint-disable-next-line no-unused-vars
   private async callOllama(messages: AIMessage[], _tools: unknown[]): Promise<string> {
     const endpoint = this.config.store.aiAgent?.ollamaEndpoint || 'http://localhost:11434';
     const model = this.config.store.aiAgent?.ollamaModel || 'llama3.2';
@@ -249,6 +251,7 @@ export class AIAgentService {
      }
   }
 
+  // eslint-disable-next-line no-unused-vars
   private async callGeminiAPI(messages: AIMessage[], _tools: unknown[]): Promise<string> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -507,6 +510,7 @@ export class AIAgentService {
     }
   }
 
+  // eslint-disable-next-line no-unused-vars
   private getOfflineFallbackResponse(_input: string): string {
     const fallbackResponses = [
       "I'm currently offline. Here are some general suggestions:",
@@ -519,6 +523,7 @@ export class AIAgentService {
     return fallbackResponses.join('\n');
   }
 
+  // eslint-disable-next-line no-unused-vars
   private getErrorFallbackResponse(error: unknown, _input: string): string {
     if ((error as any)?.message?.includes('API key')) {
       return "Please configure your API key in the plugin settings to use AI features.";

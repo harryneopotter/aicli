@@ -375,9 +375,9 @@ export class AITerminalComponent implements OnInit, OnDestroy {
       const context = await this.contextManager.getFullContext();
       this.contextInfo = {
         workingDirectory: context.workingDirectory,
-        gitStatus: context.gitStatus,
+        gitStatus: context.gitStatus || null,
         recentCommands: context.recentCommands || [],
-        projectType: context.projectType,
+        projectType: context.projectType || null,
         recentOutput: context.recentOutput || []
       };
     } catch (error) {

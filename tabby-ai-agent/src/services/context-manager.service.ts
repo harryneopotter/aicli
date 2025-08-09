@@ -217,7 +217,7 @@ export class ContextManagerService {
       userInputs: this.userInputs.length,
       recentCommands: this.recentCommands.length,
       cacheAge: this.contextCache.lastUpdated ? Date.now() - this.contextCache.lastUpdated : 0,
-      isCacheValid: this.contextCache.lastUpdated && (Date.now() - this.contextCache.lastUpdated) < this.CACHE_TTL
+      isCacheValid: Boolean(this.contextCache.lastUpdated && (Date.now() - this.contextCache.lastUpdated) < this.CACHE_TTL)
     };
   }
 }

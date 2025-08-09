@@ -3,6 +3,7 @@ import { ConfigService } from 'tabby-core';
 import { ContextManagerService } from './context-manager.service';
 import { MCPClientService } from './mcp-client.service';
 import fetch from 'node-fetch';
+import { ContextInfo, ConfigStore } from '../types/interfaces';
 
 interface AIMessage {
   role: 'user' | 'assistant' | 'system';
@@ -46,14 +47,14 @@ export class AIAgentService {
   private readonly HEALTH_CHECK_INTERVAL = 60000; // 1 minute
 
   constructor(
-    private config: ConfigService,
+    private config: ConfigService & { store: ConfigStore },
     private contextManager: ContextManagerService,
     private mcpClient: MCPClientService
   ) {
     this.initializeHealthCheck();
   }
 
-  async processNaturalLanguage(input: string, context?: any, tools?: any[]): Promise<string> {
+  async processNaturalLanguage(input: string, _context?: unknown, _tools?: unknown[]): Promise<string> {
     const startTime = Date.now();
     this.performanceMetrics.totalRequests++;
     
@@ -153,9 +154,9 @@ export class AIAgentService {
     }
   }
 
-  private buildSystemPrompt(context: any): string {
+  private buildSystemPrompt(context: ContextInfo): string {
     const contextWindow = this.config.store.aiAgent?.contextWindow || 4000;
-    const autoResponse = this.config.store.aiAgent?.autoResponse !== false;
+    // Note: autoResponse configuration is available but not used in this function
     
     let prompt = `You are an AI assistant integrated into a terminal environment. Be concise and helpful.\n\n`;
     
@@ -206,7 +207,7 @@ export class AIAgentService {
     return prompt;
   }
 
-  private async callOllama(messages: AIMessage[], tools: any[]): Promise<string> {
+  private async callOllama(messages: AIMessage[], _tools: unknown[]): Promise<string> {
     const endpoint = this.config.store.aiAgent?.ollamaEndpoint || 'http://localhost:11434';
     const model = this.config.store.aiAgent?.ollamaModel || 'llama3.2';
     
@@ -248,7 +249,7 @@ export class AIAgentService {
      }
   }
 
-  private async callGeminiAPI(messages: AIMessage[], tools: any[]): Promise<string> {
+  private async callGeminiAPI(messages: AIMessage[], _tools: unknown[]): Promise<string> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('Gemini API key not configured. Please set it in the plugin settings.');
@@ -447,7 +448,7 @@ export class AIAgentService {
     let integratedResponse = response;
     integratedResponse += '\n\n--- Tool Execution Results ---';
     
-    for (const { toolCall, result, error, success, timestamp } of toolResults) {
+    for (const { toolCall, result, error, success } of toolResults) {
       integratedResponse += `\n\n🔧 Tool: ${toolCall.tool}`;
       
       if (success && result) {
@@ -506,7 +507,7 @@ export class AIAgentService {
     }
   }
 
-  private getOfflineFallbackResponse(input: string): string {
+  private getOfflineFallbackResponse(_input: string): string {
     const fallbackResponses = [
       "I'm currently offline. Here are some general suggestions:",
       "• Check if the AI service is running",
@@ -518,16 +519,16 @@ export class AIAgentService {
     return fallbackResponses.join('\n');
   }
 
-  private getErrorFallbackResponse(error: any, input: string): string {
-    if (error.message.includes('API key')) {
+  private getErrorFallbackResponse(error: unknown, _input: string): string {
+    if ((error as any)?.message?.includes('API key')) {
       return "Please configure your API key in the plugin settings to use AI features.";
     }
     
-    if (error.message.includes('timeout') || error.message.includes('connect')) {
+    if ((error as any)?.message?.includes('timeout') || (error as any)?.message?.includes('connect')) {
       return "Connection timeout. Please check if the AI service is running and accessible.";
     }
     
-    return `I encountered an error: ${error.message}. You can try running the command directly or check the plugin configuration.`;
+    return `I encountered an error: ${(error as any)?.message || 'Unknown error'}. You can try running the command directly or check the plugin configuration.`;
   }
 
   private estimateTokens(text: string): number {

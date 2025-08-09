@@ -395,7 +395,15 @@ export class AITerminalComponent implements OnInit, OnDestroy {
   }
 
   private announceToScreenReader(message: string) {
+    // Check if we're in a browser environment
+    if (typeof document === 'undefined') {
+      // In Node.js environment, we can't use document
+      console.log(`Screen reader announcement: ${message}`);
+      return;
+    }
+    
     // Create a temporary element for screen reader announcements
+    /* eslint-disable no-undef */
     const announcement = document.createElement('div');
     announcement.setAttribute('aria-live', 'polite');
     announcement.setAttribute('aria-atomic', 'true');
@@ -410,7 +418,10 @@ export class AITerminalComponent implements OnInit, OnDestroy {
     
     // Remove after announcement
     setTimeout(() => {
-      document.body.removeChild(announcement);
+      if (document.body.contains(announcement)) {
+        document.body.removeChild(announcement);
+      }
     }, 1000);
+    /* eslint-enable no-undef */
   }
 }

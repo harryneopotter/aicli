@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { simpleGit, SimpleGit } from 'simple-git';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ContextInfo, PackageInfo } from '../types/interfaces';
 
 const git: SimpleGit = simpleGit();
 
@@ -9,7 +10,7 @@ interface ContextCache {
   workingDir: string;
   gitStatus?: string | null;
   projectType?: string | null;
-  packageInfo?: any;
+  packageInfo?: PackageInfo | null;
   lastUpdated: number;
 }
 
@@ -27,6 +28,7 @@ export class ContextManagerService {
 
   addTerminalOutput(data: string) {
     // Filter out ANSI escape codes and clean the output
+    // eslint-disable-next-line no-control-regex
     const cleanData = data.replace(/\x1b\[[0-9;]*m/g, '').trim();
     if (cleanData.length > 0) {
       this.terminalOutput.push(cleanData);
@@ -55,7 +57,7 @@ export class ContextManagerService {
     }
   }
 
-  async getFullContext(): Promise<any> {
+  async getFullContext(): Promise<ContextInfo> {
     const now = Date.now();
     
     // Check if cache is still valid
@@ -146,7 +148,7 @@ export class ContextManagerService {
     }
   }
 
-  private async getPackageInfo(): Promise<any> {
+  private async getPackageInfo(): Promise<PackageInfo | null> {
     try {
       const workingDir = this.contextCache.workingDir;
       if (!workingDir) {
@@ -180,7 +182,7 @@ export class ContextManagerService {
     }
   }
 
-  private buildContextResponse(): any {
+  private buildContextResponse(): ContextInfo {
     return {
       workingDirectory: this.contextCache.workingDir || process.cwd(),
       gitStatus: this.contextCache.gitStatus,
@@ -203,7 +205,13 @@ export class ContextManagerService {
   }
 
   // Get performance info
-  getContextStats(): any {
+  getContextStats(): {
+    terminalOutputLines: number;
+    userInputs: number;
+    recentCommands: number;
+    cacheAge: number;
+    isCacheValid: boolean;
+  } {
     return {
       terminalOutputLines: this.terminalOutput.length,
       userInputs: this.userInputs.length,

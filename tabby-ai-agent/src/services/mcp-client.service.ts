@@ -703,11 +703,58 @@ export class MCPClientService {
     await this.restartServerByObject(server)
   }
 
-  private validateServerConfig(config: MCPServerConfig) {
-    // Add allowed commands pattern
+  private validateServerConfig(config: MCPServerConfig): void {
+    // Validate command whitelist
     const ALLOWED_COMMANDS = new Set(['npx', 'node']);
     if (!ALLOWED_COMMANDS.has(config.command)) {
       throw new Error(`Disallowed command: ${config.command}`);
+    }
+
+    // Validate arguments for shell injection patterns
+    const DANGEROUS_PATTERNS = [
+      /[;&|`$(){}[\]\\]/,  // Shell metacharacters
+      /\.\./,              // Directory traversal
+      /^\s*-/,             // Suspicious flags
+    ];
+
+    for (const arg of config.args) {
+      if (typeof arg !== 'string') {
+        throw new Error('All arguments must be strings');
+      }
+      
+      for (const pattern of DANGEROUS_PATTERNS) {
+        if (pattern.test(arg)) {
+          throw new Error(`Potentially dangerous argument detected: ${arg}`);
+        }
+      }
+      
+      // Prevent excessively long arguments
+      if (arg.length > 1000) {
+        throw new Error(`Argument too long: ${arg.substring(0, 50)}...`);
+      }
+    }
+
+    // Validate environment variables
+    if (config.env) {
+      for (const [key, value] of Object.entries(config.env)) {
+        if (typeof key !== 'string' || typeof value !== 'string') {
+          throw new Error('Environment variables must be strings');
+        }
+        
+        // Prevent shell injection in env vars
+        if (DANGEROUS_PATTERNS.some(pattern => pattern.test(key) || pattern.test(value))) {
+          throw new Error(`Potentially dangerous environment variable: ${key}`);
+        }
+      }
+    }
+
+    // Validate timeout and retry values
+    if (config.timeout && (config.timeout < 1000 || config.timeout > 60000)) {
+      throw new Error('Timeout must be between 1000 and 60000 ms');
+    }
+    
+    if (config.retryCount && (config.retryCount < 0 || config.retryCount > 10)) {
+      throw new Error('Retry count must be between 0 and 10');
     }
   }
 }

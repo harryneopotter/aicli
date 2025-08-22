@@ -2,68 +2,71 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const MCP_SERVERS = [
-  // Core servers
+const CORE_SERVERS = [
   '@modelcontextprotocol/server-filesystem',
-  '@modelcontextprotocol/server-git', 
+  '@modelcontextprotocol/server-git',
   '@modelcontextprotocol/server-memory',
   '@modelcontextprotocol/server-brave-search',
-  '@modelcontextprotocol/server-fetch',
-  '@modelcontextprotocol/server-sqlite',
-  
-  // Advanced servers
-  '@modelcontextprotocol/server-sequential-thinking',
-  '@modelcontextprotocol/server-github',
-  '@modelcontextprotocol/server-puppeteer',
-  
-  // Specialized servers
-  'context7-mcp-server',
-  'everything-mcp',
-  'everart-mcp'
 ];
 
 const OPTIONAL_SERVERS = [
+  '@modelcontextprotocol/server-fetch',
+  '@modelcontextprotocol/server-sqlite',
+  '@modelcontextprotocol/server-sequential-thinking',
+  '@modelcontextprotocol/server-github',
+  '@modelcontextprotocol/server-puppeteer',
   '@modelcontextprotocol/server-postgres',
   '@modelcontextprotocol/server-docker',
   '@modelcontextprotocol/server-kubernetes',
   '@modelcontextprotocol/server-sentry',
-  '@modelcontextprotocol/server-youtube-transcript'
+  '@modelcontextprotocol/server-youtube-transcript',
+  'context7-mcp-server',
+  'everything-mcp',
+  'everart-mcp',
 ];
+
+function isPackageInstalled(packageName) {
+  try {
+    require.resolve(packageName);
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
 
 async function installMCPServers() {
   console.log('🚀 Installing MCP servers for AI Agent...\n');
-  
-  // Create MCP config directory
+
   const mcpDir = path.join(process.cwd(), '.mcp');
   if (!fs.existsSync(mcpDir)) {
     fs.mkdirSync(mcpDir, { recursive: true });
   }
 
-  // Install core servers
+  const installPackage = (packageName) => {
+    if (isPackageInstalled(packageName)) {
+      console.log(`  ✅ ${packageName} is already installed.`);
+      return;
+    }
+    try {
+      console.log(`  Installing ${packageName}...`);
+      execSync(`npm install ${packageName}`, { stdio: 'pipe' });
+      console.log(`  ✅ ${packageName} installed successfully.`);
+    } catch (error) {
+      console.error(`  ❌ Failed to install ${packageName}.`);
+    }
+  };
+
   console.log('📦 Installing core MCP servers...');
-  for (const server of MCP_SERVERS) {
-    try {
-      console.log(`  Installing ${server}...`);
-      execSync(`npm install -g ${server}`, { stdio: 'pipe' });
-      console.log(`  ✅ ${server} installed`);
-    } catch (error) {
-      console.log(`  ⚠️  ${server} failed (will try alternative)`);
-    }
+  CORE_SERVERS.forEach(installPackage);
+
+  const installOptional = process.argv.includes('--with-optional');
+  if (installOptional) {
+    console.log('\n🔧 Installing optional MCP servers...');
+    OPTIONAL_SERVERS.forEach(installPackage);
+  } else {
+    console.log('\nℹ️ To install optional servers, run this script with the --with-optional flag.');
   }
 
-  // Install optional servers (non-blocking)
-  console.log('\n🔧 Installing optional MCP servers...');
-  for (const server of OPTIONAL_SERVERS) {
-    try {
-      console.log(`  Installing ${server}...`);
-      execSync(`npm install -g ${server}`, { stdio: 'pipe' });
-      console.log(`  ✅ ${server} installed`);
-    } catch (error) {
-      console.log(`  ⏭️  ${server} skipped (optional)`);
-    }
-  }
-
-  // Create MCP configuration file
   const mcpConfig = {
     mcpServers: {
       filesystem: {
@@ -72,7 +75,7 @@ async function installMCPServers() {
         env: {}
       },
       git: {
-        command: "npx", 
+        command: "npx",
         args: ["@modelcontextprotocol/server-git"],
         env: {}
       },
@@ -88,16 +91,11 @@ async function installMCPServers() {
           BRAVE_API_KEY: process.env.BRAVE_API_KEY || ""
         }
       },
-      "sequential-thinking": {
-        command: "npx",
-        args: ["@modelcontextprotocol/server-sequential-thinking"],
-        env: {}
-      }
     }
   };
 
   fs.writeFileSync(
-    path.join(mcpDir, 'config.json'), 
+    path.join(mcpDir, 'config.json'),
     JSON.stringify(mcpConfig, null, 2)
   );
 

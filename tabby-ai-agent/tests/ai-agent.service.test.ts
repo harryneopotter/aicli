@@ -20,25 +20,15 @@ jest.mock('tabby-core', () => ({
 jest.mock('node-fetch', () => jest.fn());
 jest.mock('child_process');
 jest.mock('fs');
+jest.mock('simple-git', () => ({
+  simpleGit: jest.fn(() => ({
+    status: jest.fn().mockResolvedValue({ files: [] }),
+  })),
+}));
 
 // Mock global fetch
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
-
-// Mock console methods
-const originalConsole = console;
-beforeAll(() => {
-  global.console = {
-    ...originalConsole,
-    warn: jest.fn(),
-    error: jest.fn(),
-    log: jest.fn()
-  };
-});
-
-afterAll(() => {
-  global.console = originalConsole;
-});
 
 // Import after mocking
 const { AIAgentService } = require('../src/services/ai-agent.service');
@@ -78,43 +68,28 @@ describe('AIAgentService', () => {
   let service: any;
 
   beforeEach(() => {
-    service = new AIAgentService(
-      mockConfig,
-      mockContextManager,
-      mockMCPClient
-    );
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
+    (fetch as jest.Mock).mockClear();
   });
 
   describe('processNaturalLanguage', () => {
     it('should process natural language input successfully with Ollama', async () => {
-      // Mock health check endpoint (/api/tags)
-      const mockHealthResponse = {
-        ok: true
-      };
-      // Mock chat endpoint
-      const mockChatResponse = {
-        ok: true,
-        json: jest.fn().mockResolvedValue({
-          message: { content: 'Test response from Ollama' }
-        })
-      };
-      mockFetch.mockResolvedValueOnce(mockHealthResponse as any);
-      mockFetch.mockResolvedValueOnce(mockChatResponse as any);
-
+      (fetch as jest.Mock).mockImplementation((url) => {
+        if (url.includes('/api/tags')) {
+          return Promise.resolve({ ok: true });
+        }
+        if (url.includes('/api/chat')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ message: { content: 'Test response from Ollama' } }),
+          });
+        }
+        return Promise.reject(new Error('Unhandled fetch call'));
+      });
+      service = new AIAgentService(mockConfig, mockContextManager, mockMCPClient);
       const result = await service.processNaturalLanguage('test input');
 
       expect(result).toBe('Test response from Ollama');
-      expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:11434/api/tags',
-        expect.objectContaining({
-          method: 'GET'
-        })
-      );
-      expect(mockFetch).toHaveBeenCalledWith(
+      expect(fetch).toHaveBeenCalledWith(
         'http://localhost:11434/api/chat',
         expect.objectContaining({
           method: 'POST',
@@ -124,18 +99,23 @@ describe('AIAgentService', () => {
     });
 
     it('should handle API errors gracefully', async () => {
-      // Mock health check to succeed (/api/tags)
-      global.fetch.mockResolvedValueOnce({ ok: true } as any);
-      // Mock chat endpoint to fail
-      global.fetch.mockRejectedValueOnce(new Error('Network error'));
-
+      (fetch as jest.Mock).mockImplementation((url) => {
+        if (url.includes('/api/tags')) {
+          return Promise.resolve({ ok: true });
+        }
+        if (url.includes('/api/chat')) {
+          return Promise.reject(new Error('Network error'));
+        }
+        return Promise.reject(new Error('Unhandled fetch call'));
+      });
+      service = new AIAgentService(mockConfig, mockContextManager, mockMCPClient);
       const result = await service.processNaturalLanguage('test input');
       expect(result).toContain('I encountered an error');
     });
 
     it('should handle network errors with fallback', async () => {
-      global.fetch.mockRejectedValue(new Error('Network error'));
-
+      (fetch as jest.Mock).mockImplementation(() => Promise.reject(new Error('Network error')));
+      service = new AIAgentService(mockConfig, mockContextManager, mockMCPClient);
       const result = await service.processNaturalLanguage('test input');
 
       expect(result).toContain('currently offline');

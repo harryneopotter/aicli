@@ -15,3 +15,18 @@ afterEach(() => {
 
 // Increase timeout for integration tests
 jest.setTimeout(10000);
+
+// Mock console methods
+const originalConsole = console;
+beforeAll(() => {
+  global.console = {
+    ...originalConsole,
+    warn: jest.fn(),
+    error: jest.fn(),
+    log: jest.fn()
+  };
+});
+
+afterAll(() => {
+  global.console = originalConsole;
+});

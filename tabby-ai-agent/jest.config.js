@@ -27,11 +27,12 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^@modelcontextprotocol/sdk/(.*)$': '<rootDir>/tests/__mocks__/@modelcontextprotocol/sdk/$1'
+    '^@modelcontextprotocol/sdk/(.*)$': '<rootDir>/tests/__mocks__/@modelcontextprotocol/sdk/$1',
+    'rxjs': '<rootDir>/node_modules/rxjs/dist/cjs/index.js'
   },
   testTimeout: 10000,
   clearMocks: true,
   transformIgnorePatterns: [
-    'node_modules/(?!(@modelcontextprotocol)/)'
+    'node_modules/(?!(@angular|@modelcontextprotocol)/)'
   ]
 };

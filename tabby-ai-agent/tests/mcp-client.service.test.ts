@@ -8,21 +8,6 @@ jest.mock('child_process');
 jest.mock('@modelcontextprotocol/sdk/client/stdio.js');
 jest.mock('@modelcontextprotocol/sdk/client/index.js');
 
-// Mock console methods
-const originalConsole = console;
-beforeAll(() => {
-  global.console = {
-    ...originalConsole,
-    warn: jest.fn(),
-    error: jest.fn(),
-    log: jest.fn()
-  };
-});
-
-afterAll(() => {
-  global.console = originalConsole;
-});
-
 // Import after mocking
 const { MCPClientService } = require('../src/services/mcp-client.service');
 

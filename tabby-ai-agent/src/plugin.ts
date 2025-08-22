@@ -8,6 +8,7 @@ import { MCPClientService } from './services/mcp-client.service'
 import { ContextManagerService } from './services/context-manager.service'
 import { AITerminalComponent } from './components/ai-terminal.component'
 import { debug, LogLevel } from './utils/debug'
+import commandExists from 'command-exists'
 
 // Utility function for input sanitization
 export function cleanInput(input: string): string {
@@ -176,19 +177,32 @@ export class AIAgentTerminalDecorator extends TerminalDecorator {
   }
 
   private isCommand(input: string): boolean {
-    // Liberal detection - anything that looks like a command
-    const commandPatterns = [
-      /^[a-zA-Z][a-zA-Z0-9_-]*(\s|$)/, // Standard commands (ls, cd, git, etc.)
-      /^\.\//,  // Relative execution
-      /^\//,    // Absolute paths
-      /^\w+:/,  // Windows drives
-      /^~/,     // Home directory
-      /^\$/,    // Variable expansion
-      /^\|/,    // Pipes
-      /^>/,     // Redirects
-    ]
-    
-    return commandPatterns.some(pattern => pattern.test(input))
+    const trimmedInput = input.trim()
+    if (!trimmedInput) {
+      return false
+    }
+
+    // Special shell characters that indicate a command
+    const commandIndicators = ['/', './', '../', '~', '$', '|', '>', '<', '&&', '||']
+    if (commandIndicators.some(indicator => trimmedInput.startsWith(indicator))) {
+      return true
+    }
+
+    // Windows drive letters
+    if (/^[a-zA-Z]:\\/.test(trimmedInput)) {
+      return true
+    }
+
+    // Get the first token
+    const firstToken = trimmedInput.split(' ')[0]
+
+    // Check if the first token is a command
+    try {
+      return commandExists.sync(firstToken)
+    } catch (error) {
+      // command-exists throws an error if the command is not found
+      return false
+    }
   }
 
   private async handleAIConversation(input: string, terminal: any) {
@@ -228,13 +242,17 @@ export class AIAgentTerminalDecorator extends TerminalDecorator {
     AIAgentService,
     MCPClientService,
     ContextManagerService,
-    AIAgentTerminalDecorator
+    AIAgentTerminalDecorator,
+    { provide: TerminalDecorator, useClass: AIAgentTerminalDecorator, multi: true },
   ],
   declarations: [
     AITerminalComponent
+  ],
+  exports: [
+    AITerminalComponent
   ]
 })
-class AIAgentPluginModule {}
+export class AIAgentPluginModule {}
 
 export default {
   id: 'ai-agent',
@@ -245,9 +263,5 @@ export default {
     aiProvider: 'openai',
     mcpServers: []
   },
-  providers: [
-    AIAgentService,
-    MCPClientService,
-    ContextManagerService
-  ]
+  ngModule: AIAgentPluginModule
 }

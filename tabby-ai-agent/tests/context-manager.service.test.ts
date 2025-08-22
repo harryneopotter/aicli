@@ -24,20 +24,11 @@ jest.mock('util', () => ({
   promisify: jest.fn()
 }));
 
-// Mock console methods
-const originalConsole = console;
-beforeAll(() => {
-  global.console = {
-    ...originalConsole,
-    warn: jest.fn(),
-    error: jest.fn(),
-    log: jest.fn()
-  };
-});
-
-afterAll(() => {
-  global.console = originalConsole;
-});
+jest.mock('simple-git', () => ({
+  simpleGit: jest.fn(() => ({
+    status: jest.fn().mockResolvedValue({ files: [] }),
+  })),
+}));
 
 // Import after mocking
 const { ContextManagerService } = require('../src/services/context-manager.service');
@@ -58,7 +49,7 @@ describe('ContextManagerService', () => {
 
   beforeEach(() => {
     service = new ContextManagerService();
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   describe('addTerminalOutput', () => {
@@ -130,55 +121,29 @@ describe('ContextManagerService', () => {
 
   describe('getFullContext', () => {
     it('should detect Node.js project', async () => {
-      const mockFs = require('fs');
-      const util = require('util');
-      const mockExecAsync = jest.fn();
-      util.promisify.mockReturnValue(mockExecAsync);
-      mockExecAsync.mockRejectedValue(new Error('Not a git repository'));
-      
-      mockFs.promises.access.mockImplementation((path: string) => {
-        if (path.includes('package.json')) {
-          return Promise.resolve();
-        }
+      const fs = require('fs');
+      fs.promises.access.mockImplementation((path: string) => {
+        if (path.includes('package.json')) return Promise.resolve();
         return Promise.reject(new Error('File not found'));
       });
-      mockFs.promises.readFile.mockResolvedValue(JSON.stringify({
-        name: 'test-project',
-        version: '1.0.0',
-        scripts: { test: 'jest' }
-      }));
-
+      fs.promises.readFile.mockResolvedValue(JSON.stringify({ name: 'test-project', version: '1.0.0' }));
       const context = await service.getFullContext();
       expect(context.projectType).toBe('Node.js/JavaScript');
     });
 
     it('should detect Python project', async () => {
-      const mockFs = require('fs');
-      const util = require('util');
-      const mockExecAsync = jest.fn();
-      util.promisify.mockReturnValue(mockExecAsync);
-      mockExecAsync.mockRejectedValue(new Error('Not a git repository'));
-      
-      mockFs.promises.access.mockImplementation((path: string) => {
-        if (path.includes('requirements.txt')) {
-          return Promise.resolve();
-        }
+      const fs = require('fs');
+      fs.promises.access.mockImplementation((path: string) => {
+        if (path.includes('requirements.txt')) return Promise.resolve();
         return Promise.reject(new Error('File not found'));
       });
-
       const context = await service.getFullContext();
       expect(context.projectType).toBe('Python');
     });
 
     it('should return null for unrecognized projects', async () => {
-      const mockFs = require('fs');
-      const util = require('util');
-      const mockExecAsync = jest.fn();
-      util.promisify.mockReturnValue(mockExecAsync);
-      mockExecAsync.mockRejectedValue(new Error('Not a git repository'));
-      
-      mockFs.promises.access.mockRejectedValue(new Error('File not found'));
-
+      const fs = require('fs');
+      fs.promises.access.mockRejectedValue(new Error('File not found'));
       const context = await service.getFullContext();
       expect(context.projectType).toBe(null);
     });
@@ -186,25 +151,19 @@ describe('ContextManagerService', () => {
 
   describe('git status integration', () => {
     it('should return git status when in git repository', async () => {
-      const util = require('util');
-      const mockExecAsync = jest.fn();
-      util.promisify.mockReturnValue(mockExecAsync);
-      
-      mockExecAsync
-        .mockResolvedValueOnce({ stdout: '' }) // git status --porcelain
-        .mockResolvedValueOnce({ stdout: 'main\n' }); // git branch --show-current
-
+      const simpleGit = require('simple-git');
+      simpleGit.simpleGit.mockReturnValue({
+        status: jest.fn().mockResolvedValue({ current: 'main', files: [] }),
+      });
       const context = await service.getFullContext();
       expect(context.gitStatus).toContain('main');
     });
 
     it('should handle non-git directories', async () => {
-      const util = require('util');
-      const mockExecAsync = jest.fn();
-      util.promisify.mockReturnValue(mockExecAsync);
-      
-      mockExecAsync.mockRejectedValue(new Error('Not a git repository'));
-
+      const simpleGit = require('simple-git');
+      simpleGit.simpleGit.mockReturnValue({
+        status: jest.fn().mockRejectedValue(new Error('Not a git repository')),
+      });
       const context = await service.getFullContext();
       expect(context.gitStatus).toBe(null);
     });

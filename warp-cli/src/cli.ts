@@ -1,0 +1,365 @@
+#!/usr/bin/env node
+
+import { Command } from 'commander';
+import * as readline from 'readline';
+import { uiRenderer } from './ui/renderer';
+import { configService } from './services/config.service';
+import { sessionService } from './services/session.service';
+import { chatService } from './services/chat.service';
+import { commandHandler } from './commands/handlers';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+import * as os from 'os';
+
+// Load environment variables
+dotenv.config();
+dotenv.config({ path: path.join(os.homedir(), '.warp-cli', '.env') });
+
+const program = new Command();
+
+program
+  .name('warp-cli')
+  .description('AI-powered coding assistant CLI with multi-LLM support')
+  .version('1.0.0');
+
+program
+  .command('chat')
+  .description('Start interactive chat session (default)')
+  .option('-p, --provider <provider>', 'LLM provider to use')
+  .option('-m, --model <model>', 'Model to use')
+  .option('-s, --session <id>', 'Resume existing session')
+  .action(async (options) => {
+    await startChatSession(options);
+  });
+
+program
+  .command('config')
+  .description('Manage configuration')
+  .option('-s, --set <key=value>', 'Set configuration value')
+  .option('-g, --get <key>', 'Get configuration value')
+  .option('-l, --list', 'List all configuration')
+  .option('-r, --reset', 'Reset to defaults')
+  .action(async (options) => {
+    await manageConfig(options);
+  });
+
+program
+  .command('sessions')
+  .description('Manage sessions')
+  .option('-l, --list', 'List all sessions')
+  .option('-d, --delete <id>', 'Delete a session')
+  .option('-e, --export <id>', 'Export a session')
+  .option('-f, --format <format>', 'Export format (json|markdown)', 'json')
+  .action(async (options) => {
+    await manageSessions(options);
+  });
+
+program
+  .command('setup')
+  .description('Interactive setup wizard')
+  .action(async () => {
+    await runSetup();
+  });
+
+// Default to chat if no command specified
+program.action(async () => {
+  await startChatSession({});
+});
+
+async function startChatSession(options: any): Promise<void> {
+  try {
+    // Initialize services
+    await sessionService.initialize();
+    await chatService.initialize();
+
+    // Apply CLI options
+    if (options.provider) {
+      await chatService.switchProvider(options.provider);
+    }
+
+    if (options.model) {
+      const provider = configService.get('defaultProvider');
+      const providerConfig = configService.getProviderConfig(provider);
+      if (providerConfig) {
+        (providerConfig as any).model = options.model;
+        configService.setProviderConfig(provider, providerConfig);
+      }
+    }
+
+    // Load or create session
+    if (options.session) {
+      await sessionService.loadSession(options.session);
+    } else {
+      await sessionService.createSession();
+    }
+
+    // Clear screen and show welcome
+    uiRenderer.clear();
+    uiRenderer.renderWelcome();
+
+    const session = sessionService.getCurrentSession();
+    if (session) {
+      uiRenderer.renderSessionInfo({
+        name: session.name,
+        messageCount: session.messages.length,
+        created: session.created
+      });
+    }
+
+    // Show provider status
+    const status = await chatService.checkProviderStatus();
+    if (status.available) {
+      uiRenderer.renderInfo(`Using ${status.provider} provider`);
+    } else {
+      uiRenderer.renderWarning(
+        `Provider ${status.provider} not available: ${status.error || 'Unknown error'}`
+      );
+    }
+
+    // Start REPL
+    await startREPL();
+  } catch (error: any) {
+    uiRenderer.renderError(`Failed to start chat session: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+async function startREPL(): Promise<void> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: '',
+    terminal: true
+  });
+
+  const streaming = configService.get('ui').streaming;
+
+  // Handle Ctrl+C
+  rl.on('SIGINT', async () => {
+    uiRenderer.renderInfo('\nExiting...');
+    await sessionService.cleanup();
+    process.exit(0);
+  });
+
+  const processInput = async (input: string) => {
+    const trimmed = input.trim();
+
+    if (!trimmed) {
+      uiRenderer.renderPrompt('chat');
+      return;
+    }
+
+    try {
+      // Check if it's a command
+      const shouldExit = await commandHandler.handleCommand(trimmed);
+
+      if (shouldExit) {
+        rl.close();
+        return;
+      }
+
+      // If not a command, treat as chat message
+      if (!trimmed.startsWith('/')) {
+        await chatService.chat(trimmed, { streaming });
+      }
+    } catch (error: any) {
+      uiRenderer.renderError(error.message);
+    }
+
+    uiRenderer.renderPrompt('chat');
+  };
+
+  rl.on('line', async (input: string) => {
+    await processInput(input);
+  });
+
+  rl.on('close', async () => {
+    await sessionService.cleanup();
+    process.exit(0);
+  });
+
+  // Show initial prompt
+  uiRenderer.renderPrompt('chat');
+}
+
+async function manageConfig(options: any): Promise<void> {
+  try {
+    if (options.reset) {
+      configService.reset();
+      uiRenderer.renderSuccess('Configuration reset to defaults');
+      return;
+    }
+
+    if (options.list) {
+      const config = configService.getAll();
+      uiRenderer.renderBox('Configuration', JSON.stringify(config, null, 2), {
+        color: 'cyan'
+      });
+      return;
+    }
+
+    if (options.get) {
+      const value = configService.get(options.get as any);
+      console.log(JSON.stringify(value, null, 2));
+      return;
+    }
+
+    if (options.set) {
+      const [key, ...valueParts] = options.set.split('=');
+      const value = valueParts.join('=');
+
+      if (!value) {
+        throw new Error('Invalid format. Use: --set key=value');
+      }
+
+      try {
+        const parsedValue = JSON.parse(value);
+        configService.set(key as any, parsedValue);
+      } catch {
+        configService.set(key as any, value as any);
+      }
+
+      uiRenderer.renderSuccess(`Set ${key} = ${value}`);
+      return;
+    }
+
+    // Show help
+    program.help();
+  } catch (error: any) {
+    uiRenderer.renderError(error.message);
+    process.exit(1);
+  }
+}
+
+async function manageSessions(options: any): Promise<void> {
+  try {
+    await sessionService.initialize();
+
+    if (options.list) {
+      const sessions = await sessionService.listSessions();
+      const headers = ['ID', 'Name', 'Created', 'Updated'];
+      const rows = sessions.map(s => [
+        s.id.substring(0, 8),
+        s.name,
+        s.created.toLocaleString(),
+        s.updated.toLocaleString()
+      ]);
+      uiRenderer.renderTable(headers, rows);
+      return;
+    }
+
+    if (options.delete) {
+      await sessionService.deleteSession(options.delete);
+      uiRenderer.renderSuccess(`Deleted session: ${options.delete}`);
+      return;
+    }
+
+    if (options.export) {
+      const format = options.format || 'json';
+      const data = await sessionService.exportSession(options.export, format);
+      console.log(data);
+      return;
+    }
+
+    // Show help
+    program.help();
+  } catch (error: any) {
+    uiRenderer.renderError(error.message);
+    process.exit(1);
+  }
+}
+
+async function runSetup(): Promise<void> {
+  const inquirer = await import('inquirer');
+
+  uiRenderer.clear();
+  uiRenderer.renderBox(
+    'Warp CLI Setup',
+    'Welcome! Let\'s configure your AI coding assistant.',
+    { color: 'cyan' }
+  );
+
+  const answers = await inquirer.default.prompt([
+    {
+      type: 'list',
+      name: 'provider',
+      message: 'Choose your default LLM provider:',
+      choices: [
+        { name: 'Ollama (Local)', value: 'ollama' },
+        { name: 'OpenAI', value: 'openai' },
+        { name: 'Anthropic (Claude)', value: 'anthropic' },
+        { name: 'Google Gemini', value: 'gemini' }
+      ]
+    }
+  ]);
+
+  configService.set('defaultProvider', answers.provider);
+
+  // Provider-specific setup
+  if (answers.provider === 'ollama') {
+    const ollamaAnswers = await inquirer.default.prompt([
+      {
+        type: 'input',
+        name: 'endpoint',
+        message: 'Ollama endpoint:',
+        default: 'http://localhost:11434'
+      },
+      {
+        type: 'input',
+        name: 'model',
+        message: 'Default model:',
+        default: 'llama3.2'
+      }
+    ]);
+
+    configService.setProviderConfig('ollama', ollamaAnswers);
+  } else {
+    const apiAnswers = await inquirer.default.prompt([
+      {
+        type: 'password',
+        name: 'apiKey',
+        message: `${answers.provider} API Key:`,
+        mask: '*'
+      },
+      {
+        type: 'input',
+        name: 'model',
+        message: 'Default model:',
+        default:
+          answers.provider === 'openai'
+            ? 'gpt-4-turbo-preview'
+            : answers.provider === 'anthropic'
+            ? 'claude-3-5-sonnet-20241022'
+            : 'gemini-1.5-flash'
+      }
+    ]);
+
+    configService.setProviderConfig(answers.provider, apiAnswers);
+  }
+
+  // UI preferences
+  const uiAnswers = await inquirer.default.prompt([
+    {
+      type: 'confirm',
+      name: 'streaming',
+      message: 'Enable streaming responses?',
+      default: true
+    },
+    {
+      type: 'confirm',
+      name: 'markdown',
+      message: 'Enable markdown rendering?',
+      default: true
+    }
+  ]);
+
+  configService.set('ui', {
+    ...configService.get('ui'),
+    ...uiAnswers
+  });
+
+  uiRenderer.renderSuccess('Setup complete! Run "warp" to start chatting.');
+}
+
+// Run the CLI
+program.parse();

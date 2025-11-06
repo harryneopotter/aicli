@@ -190,6 +190,8 @@ export function validateFTSQuery(query: string): { valid: boolean; error?: strin
     /;\s*delete\s+from/gi,
     /;\s*update\s+/gi,
     /union\s+select/gi,
+    /drop\s+table/gi,  // Added: Direct DROP TABLE
+    /delete\s+from/gi,  // Added: Direct DELETE FROM
     /--/g,
     /\/\*/g,
     /\*\//g

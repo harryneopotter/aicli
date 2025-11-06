@@ -2,6 +2,7 @@ import Conf from 'conf';
 import * as path from 'path';
 import * as os from 'os';
 import { Config } from '../types';
+import { maskSensitiveConfig } from '../utils/security';
 
 export class ConfigService {
   private config: Conf<Config>;
@@ -45,8 +46,9 @@ export class ConfigService {
     this.config.set(key, value);
   }
 
-  getAll(): Config {
-    return this.config.store;
+  getAll(maskSensitive: boolean = true): Config {
+    const config = this.config.store;
+    return maskSensitive ? maskSensitiveConfig(config) : config;
   }
 
   reset(): void {
@@ -82,8 +84,17 @@ export class ConfigService {
     }
   }
 
-  exportConfig(): string {
-    return JSON.stringify(this.config.store, null, 2);
+  exportConfig(includeSensitive: boolean = false): string {
+    const config = includeSensitive ? this.config.store : maskSensitiveConfig(this.config.store);
+
+    if (includeSensitive) {
+      console.warn(
+        '\n⚠️  WARNING: This export contains sensitive data (API keys, tokens, etc.).\n' +
+        '⚠️  Do not share this output publicly or commit it to version control.\n'
+      );
+    }
+
+    return JSON.stringify(config, null, 2);
   }
 
   importConfig(configString: string): void {

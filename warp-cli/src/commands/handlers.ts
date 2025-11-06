@@ -3,6 +3,8 @@ import { sessionService } from '../services/session.service';
 import { chatService } from '../services/chat.service';
 import { configService } from '../services/config.service';
 import { contextService } from '../services/context.service';
+import { auditService } from '../services/audit.service';
+import { validateCommand, sanitizeArgument } from '../utils/security';
 import { format } from 'date-fns';
 
 export class CommandHandler {
@@ -100,6 +102,24 @@ export class CommandHandler {
           uiRenderer.renderError(`Unknown command: /${command}. Type /help for available commands.`);
       }
     } catch (error: any) {
+      // Provide contextual error information
+      const errorContext = {
+        command: command.toLowerCase(),
+        args: argsString,
+        timestamp: new Date().toISOString(),
+        cwd: process.cwd()
+      };
+
+      // Log the error with context
+      await auditService.log({
+        action: 'command_error',
+        resource: `/${command}`,
+        status: 'failure',
+        details: `Command failed with error: ${error.message}`,
+        error: error.message,
+        metadata: errorContext
+      });
+
       uiRenderer.renderError(error.message);
     }
 
@@ -134,6 +154,7 @@ export class CommandHandler {
   private async handleSave(name?: string): Promise<void> {
     const session = sessionService.getCurrentSession();
     if (!session) {
+      await auditService.logSessionOperation('save', 'none', 'failure', 'No active session');
       throw new Error('No active session to save');
     }
 
@@ -141,8 +162,14 @@ export class CommandHandler {
       session.name = name;
     }
 
-    await sessionService.saveCurrentSession();
-    uiRenderer.renderSuccess(`Session saved: ${session.name} (ID: ${session.id})`);
+    try {
+      await sessionService.saveCurrentSession();
+      await auditService.logSessionOperation('save', session.id, 'success');
+      uiRenderer.renderSuccess(`Session saved: ${session.name} (ID: ${session.id})`);
+    } catch (error: any) {
+      await auditService.logSessionOperation('save', session.id, 'failure', error.message);
+      throw error;
+    }
   }
 
   private async handleLoad(id: string): Promise<void> {
@@ -150,24 +177,32 @@ export class CommandHandler {
       throw new Error('Please provide a session ID. Use /list to see available sessions.');
     }
 
-    const session = await sessionService.loadSession(id);
-    if (!session) {
-      throw new Error(`Session not found: ${id}`);
-    }
+    try {
+      const session = await sessionService.loadSession(id);
+      if (!session) {
+        await auditService.logSessionOperation('load', id, 'failure', 'Session not found');
+        throw new Error(`Session not found: ${id}`);
+      }
 
-    uiRenderer.renderSuccess(`Loaded session: ${session.name}`);
-    uiRenderer.renderSessionInfo({
-      name: session.name,
-      messageCount: session.messages.length,
-      created: session.created
-    });
+      await auditService.logSessionOperation('load', id, 'success');
 
-    // Display recent messages
-    if (session.messages.length > 0) {
-      uiRenderer.renderInfo('Recent messages:');
-      session.messages.slice(-3).forEach(msg => {
-        uiRenderer.renderMessage(msg);
+      uiRenderer.renderSuccess(`Loaded session: ${session.name}`);
+      uiRenderer.renderSessionInfo({
+        name: session.name,
+        messageCount: session.messages.length,
+        created: session.created
       });
+
+      // Display recent messages
+      if (session.messages.length > 0) {
+        uiRenderer.renderInfo('Recent messages:');
+        session.messages.slice(-3).forEach(msg => {
+          uiRenderer.renderMessage(msg);
+        });
+      }
+    } catch (error: any) {
+      await auditService.logSessionOperation('load', id, 'failure', error.message);
+      throw error;
     }
   }
 
@@ -195,8 +230,14 @@ export class CommandHandler {
       throw new Error('Please provide a session ID to delete.');
     }
 
-    await sessionService.deleteSession(id);
-    uiRenderer.renderSuccess(`Session deleted: ${id}`);
+    try {
+      await sessionService.deleteSession(id);
+      await auditService.logSessionOperation('delete', id, 'success');
+      uiRenderer.renderSuccess(`Session deleted: ${id}`);
+    } catch (error: any) {
+      await auditService.logSessionOperation('delete', id, 'failure', error.message);
+      throw error;
+    }
   }
 
   private async handleSearch(query: string): Promise<void> {
@@ -285,11 +326,61 @@ export class CommandHandler {
       throw new Error('Please provide a command to execute.');
     }
 
+    // Validate command before execution
+    const validation = validateCommand(command);
+    if (!validation.valid) {
+      await auditService.logSecurityEvent(
+        'exec_validation_failed',
+        `User attempted to execute invalid command via /exec: ${command}`,
+        'failure'
+      );
+      throw new Error(`Security validation failed: ${validation.error}`);
+    }
+
+    // Log the exec command usage
+    await auditService.log({
+      action: 'exec_command',
+      resource: command,
+      status: 'success',
+      details: 'User executed command via /exec'
+    });
+
     await chatService.executeCommand(command);
   }
 
   private async handleGit(args: string): Promise<void> {
-    await chatService.executeCommand(`git ${args}`);
+    if (!args) {
+      throw new Error('Please provide git command arguments.');
+    }
+
+    // Sanitize git arguments to prevent command injection
+    const sanitizedArgs = args
+      .split(/\s+/)
+      .map(arg => sanitizeArgument(arg))
+      .join(' ');
+
+    const fullCommand = `git ${sanitizedArgs}`;
+
+    // Validate the full git command
+    const validation = validateCommand(fullCommand);
+    if (!validation.valid) {
+      await auditService.logSecurityEvent(
+        'git_validation_failed',
+        `User attempted to execute invalid git command: ${fullCommand}`,
+        'failure'
+      );
+      throw new Error(`Security validation failed: ${validation.error}`);
+    }
+
+    // Log git command usage
+    await auditService.log({
+      action: 'git_command',
+      resource: fullCommand,
+      status: 'success',
+      details: 'User executed git command via /git'
+    });
+
+    await chatService.executeCommand(fullCommand);
   }
 
   private async handleStats(): Promise<void> {

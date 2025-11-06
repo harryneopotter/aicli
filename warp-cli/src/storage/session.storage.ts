@@ -1,7 +1,15 @@
 import sqlite3 from 'sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
-import { Session, Message, StorageProvider } from '../types';
+import { Session, Message, StorageProvider, SessionContext } from '../types';
+import { validateFTSQuery, safeJSONParse } from '../utils/security';
+
+// Default fallback for SessionContext
+const DEFAULT_SESSION_CONTEXT: SessionContext = {
+  workingDirectory: process.cwd(),
+  recentCommands: [],
+  environment: {}
+};
 
 export class SessionStorage implements StorageProvider {
   private db?: sqlite3.Database;
@@ -172,7 +180,7 @@ export class SessionStorage implements StorageProvider {
       content: row.content,
       timestamp: new Date(row.timestamp),
       tokens: row.tokens || undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      metadata: row.metadata ? safeJSONParse(row.metadata, undefined) : undefined
     }));
 
     return {
@@ -181,8 +189,8 @@ export class SessionStorage implements StorageProvider {
       created: new Date(sessionRow.created),
       updated: new Date(sessionRow.updated),
       messages,
-      context: JSON.parse(sessionRow.context),
-      metadata: sessionRow.metadata ? JSON.parse(sessionRow.metadata) : undefined
+      context: safeJSONParse(sessionRow.context, DEFAULT_SESSION_CONTEXT),
+      metadata: sessionRow.metadata ? safeJSONParse(sessionRow.metadata, undefined) : undefined
     };
   }
 
@@ -201,8 +209,8 @@ export class SessionStorage implements StorageProvider {
       created: new Date(row.created),
       updated: new Date(row.updated),
       messages: [], // Don't load messages for list view
-      context: JSON.parse(row.context),
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      context: safeJSONParse(row.context, DEFAULT_SESSION_CONTEXT),
+      metadata: row.metadata ? safeJSONParse(row.metadata, undefined) : undefined
     }));
   }
 
@@ -222,24 +230,36 @@ export class SessionStorage implements StorageProvider {
   async searchSessions(query: string): Promise<Session[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    const rows: any[] = await this.allAsync(
-      `SELECT s.id, s.name, s.created, s.updated, s.context, s.metadata
-       FROM sessions s
-       JOIN sessions_fts fts ON s.rowid = fts.rowid
-       WHERE sessions_fts MATCH ?
-       ORDER BY rank`,
-      [query]
-    );
+    // Validate FTS query to prevent injection
+    const validation = validateFTSQuery(query);
+    if (!validation.valid) {
+      throw new Error(`Invalid search query: ${validation.error}`);
+    }
 
-    return rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      created: new Date(row.created),
-      updated: new Date(row.updated),
-      messages: [],
-      context: JSON.parse(row.context),
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
-    }));
+    try {
+      const rows: any[] = await this.allAsync(
+        `SELECT s.id, s.name, s.created, s.updated, s.context, s.metadata
+         FROM sessions s
+         JOIN sessions_fts fts ON s.rowid = fts.rowid
+         WHERE sessions_fts MATCH ?
+         ORDER BY rank`,
+        [query]
+      );
+
+      return rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        created: new Date(row.created),
+        updated: new Date(row.updated),
+        messages: [],
+        context: safeJSONParse(row.context, DEFAULT_SESSION_CONTEXT),
+        metadata: row.metadata ? safeJSONParse(row.metadata, undefined) : undefined
+      }));
+    } catch (error: any) {
+      // Handle FTS query errors gracefully
+      console.error('Search error:', error.message);
+      throw new Error(`Search failed: Invalid query syntax. Please check your search terms.`);
+    }
   }
 
   async close(): Promise<void> {

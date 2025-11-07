@@ -180,35 +180,8 @@ export class SessionService {
     oldestSession?: Date;
     newestSession?: Date;
   }> {
-    const sessions = await this.storage.listSessions();
-
-    let totalMessages = 0;
-    let oldestSession: Date | undefined;
-    let newestSession: Date | undefined;
-
-    sessions.forEach(session => {
-      if (!oldestSession || session.created < oldestSession) {
-        oldestSession = session.created;
-      }
-      if (!newestSession || session.created > newestSession) {
-        newestSession = session.created;
-      }
-    });
-
-    // Load all sessions to count messages (could be optimized with DB query)
-    for (const session of sessions) {
-      const fullSession = await this.storage.loadSession(session.id);
-      if (fullSession) {
-        totalMessages += fullSession.messages.length;
-      }
-    }
-
-    return {
-      totalSessions: sessions.length,
-      totalMessages,
-      oldestSession,
-      newestSession
-    };
+    // Use optimized storage method (single SQL query instead of loading all sessions)
+    return await this.storage.getSessionStats();
   }
 
   async cleanup(): Promise<void> {

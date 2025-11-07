@@ -262,6 +262,33 @@ export class SessionStorage implements StorageProvider {
     }
   }
 
+  async getSessionStats(): Promise<{
+    totalSessions: number;
+    totalMessages: number;
+    oldestSession?: Date;
+    newestSession?: Date;
+  }> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Optimized: Single aggregated query instead of loading all sessions (O(1) vs O(n))
+    const stats: any = await this.getAsync(`
+      SELECT
+        COUNT(DISTINCT s.id) as totalSessions,
+        COUNT(m.id) as totalMessages,
+        MIN(s.created) as oldestSession,
+        MAX(s.created) as newestSession
+      FROM sessions s
+      LEFT JOIN messages m ON s.id = m.session_id
+    `);
+
+    return {
+      totalSessions: stats?.totalSessions || 0,
+      totalMessages: stats?.totalMessages || 0,
+      oldestSession: stats?.oldestSession ? new Date(stats.oldestSession) : undefined,
+      newestSession: stats?.newestSession ? new Date(stats.newestSession) : undefined
+    };
+  }
+
   async close(): Promise<void> {
     if (this.db) {
       await new Promise<void>((resolve, reject) => {

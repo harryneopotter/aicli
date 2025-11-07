@@ -15,12 +15,54 @@ const DANGEROUS_PATTERNS = [
 
 // Allowed command whitelist for safer execution
 const ALLOWED_COMMANDS = [
+  // Unix/Linux
   'ls', 'pwd', 'echo', 'cat', 'grep', 'find', 'wc',
+  // Windows
+  'dir', 'cd', 'type', 'findstr', 'where',
+  // Cross-platform development tools
   'git', 'npm', 'node', 'python', 'python3',
   'cargo', 'go', 'mvn', 'gradle',
   'docker', 'kubectl',
   'curl', 'wget'
 ];
+
+// Platform-specific command aliases
+const COMMAND_ALIASES: Record<string, Record<string, string>> = {
+  'win32': {
+    'ls': 'dir',
+    'cat': 'type',
+    'pwd': 'cd',
+    'grep': 'findstr',
+    'rm': 'del',
+    'cp': 'copy',
+    'mv': 'move'
+  }
+};
+
+/**
+ * Normalize command for cross-platform compatibility
+ * @param command The command to normalize
+ * @returns Normalized command
+ */
+export function normalizeCommand(command: string): string {
+  const platform = process.platform;
+  const aliases = COMMAND_ALIASES[platform];
+
+  if (!aliases) {
+    return command; // No aliases for this platform
+  }
+
+  const parts = command.trim().split(/\s+/);
+  const baseCommand = parts[0];
+
+  // Check if command has a platform alias
+  if (aliases[baseCommand]) {
+    parts[0] = aliases[baseCommand];
+    return parts.join(' ');
+  }
+
+  return command;
+}
 
 /**
  * Validates if a command is safe to execute

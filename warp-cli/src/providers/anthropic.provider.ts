@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseLLMProvider } from './base.provider';
 import { LLMConfig, Message } from '../types';
+import { rateLimiter, withRetry } from '../utils/rate-limiter';
 
 export class AnthropicProvider extends BaseLLMProvider {
   name = 'anthropic';
@@ -27,16 +28,21 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const systemPrompt = systemMessages.map(m => m.content).join('\n\n');
 
+    // Apply rate limiting (50 requests per minute for Anthropic)
+    await rateLimiter.throttle('anthropic', 50, 60000);
+
     try {
-      const response = await this.client.messages.create({
-        model: effectiveConfig.model || 'claude-3-5-sonnet-20241022',
-        max_tokens: effectiveConfig.maxTokens || 2000,
-        temperature: effectiveConfig.temperature || 0.7,
-        system: systemPrompt || undefined,
-        messages: conversationMessages.map(m => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content
-        }))
+      const response = await withRetry(async () => {
+        return await this.client!.messages.create({
+          model: effectiveConfig.model || 'claude-3-5-sonnet-20241022',
+          max_tokens: effectiveConfig.maxTokens || 2000,
+          temperature: effectiveConfig.temperature || 0.7,
+          system: systemPrompt || undefined,
+          messages: conversationMessages.map(m => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content
+          }))
+        });
       });
 
       const textContent = response.content.find(c => c.type === 'text');
@@ -58,16 +64,21 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const systemPrompt = systemMessages.map(m => m.content).join('\n\n');
 
+    // Apply rate limiting
+    await rateLimiter.throttle('anthropic', 50, 60000);
+
     try {
-      const stream = await this.client.messages.stream({
-        model: effectiveConfig.model || 'claude-3-5-sonnet-20241022',
-        max_tokens: effectiveConfig.maxTokens || 2000,
-        temperature: effectiveConfig.temperature || 0.7,
-        system: systemPrompt || undefined,
-        messages: conversationMessages.map(m => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content
-        }))
+      const stream = await withRetry(async () => {
+        return await this.client!.messages.stream({
+          model: effectiveConfig.model || 'claude-3-5-sonnet-20241022',
+          max_tokens: effectiveConfig.maxTokens || 2000,
+          temperature: effectiveConfig.temperature || 0.7,
+          system: systemPrompt || undefined,
+          messages: conversationMessages.map(m => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content
+          }))
+        });
       });
 
       for await (const event of stream) {

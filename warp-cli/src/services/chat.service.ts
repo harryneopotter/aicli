@@ -4,12 +4,23 @@ import { sessionService } from './session.service';
 import { contextService } from './context.service';
 import { configService } from './config.service';
 import { uiRenderer } from '../ui/renderer';
+import { tokenTrackerService } from './token-tracker.service';
 
 export class ChatService {
   private currentProvider?: LLMProvider;
 
   async initialize(): Promise<void> {
     await this.switchProvider(configService.get('defaultProvider'));
+  }
+
+  /**
+   * Estimate token count from text
+   * Rough estimate: 1 token ≈ 4 characters for English text
+   * @param text Text to estimate
+   * @returns Estimated token count
+   */
+  private estimateTokens(text: string): number {
+    return Math.ceil(text.length / 4);
   }
 
   async switchProvider(providerName: 'ollama' | 'openai' | 'anthropic' | 'gemini'): Promise<void> {
@@ -98,6 +109,21 @@ export class ChatService {
       if (!options?.streaming) {
         uiRenderer.renderMessage(assistantMsg);
       }
+
+      // Track token usage (estimated)
+      const inputText = messages.map(m => m.content).join('\n');
+      const inputTokens = this.estimateTokens(inputText);
+      const outputTokens = this.estimateTokens(response);
+
+      const providerConfig = configService.getProviderConfig(configService.get('defaultProvider'));
+      const model = (providerConfig as any)?.model || 'unknown';
+
+      tokenTrackerService.trackUsage(
+        this.currentProvider.name,
+        model,
+        inputTokens,
+        outputTokens
+      );
 
       return response;
     } catch (error: any) {

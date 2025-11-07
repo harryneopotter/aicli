@@ -1,6 +1,7 @@
 import fetch from 'node-fetch';
 import { BaseLLMProvider } from './base.provider';
 import { LLMConfig, Message } from '../types';
+import { rateLimiter, withRetry } from '../utils/rate-limiter';
 
 export class GeminiProvider extends BaseLLMProvider {
   name = 'gemini';
@@ -32,18 +33,23 @@ export class GeminiProvider extends BaseLLMProvider {
       });
     }
 
+    // Apply rate limiting (60 requests per minute for Gemini)
+    await rateLimiter.throttle('gemini', 60, 60000);
+
     try {
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents,
-          generationConfig: {
-            temperature: effectiveConfig.temperature || 0.7,
-            topP: effectiveConfig.topP || 0.9,
-            maxOutputTokens: effectiveConfig.maxTokens || 2000
-          }
-        })
+      const response = await withRetry(async () => {
+        return await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents,
+            generationConfig: {
+              temperature: effectiveConfig.temperature || 0.7,
+              topP: effectiveConfig.topP || 0.9,
+              maxOutputTokens: effectiveConfig.maxTokens || 2000
+            }
+          })
+        });
       });
 
       if (!response.ok) {

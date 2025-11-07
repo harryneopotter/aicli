@@ -33,11 +33,31 @@ A powerful, standalone CLI-based coding agent similar to Warp.dev with support f
 - Color-coded messages
 
 ### ⚡ Powerful Commands
-- Execute shell commands
+- Execute shell commands with validation
 - Git integration
 - Command explanation
 - Error debugging
 - Code suggestions
+- Token usage tracking
+- File context loading
+- Conversation templates
+- Configuration validation
+
+### 🔒 Security Features
+- Command validation and whitelisting
+- Input sanitization
+- SQL injection prevention
+- Audit logging for all operations
+- Credential masking in outputs
+- Rate limiting for API calls
+- Automatic retry with exponential backoff
+
+### 📊 Token Management
+- Real-time token usage tracking
+- Cost estimation per provider
+- Detailed usage reports
+- Support for OpenAI, Anthropic, Gemini pricing
+- Local models (Ollama) tracked as free
 
 ## Installation
 
@@ -200,6 +220,10 @@ Example configuration:
 |---------|-------------|
 | `/stats` | Show session statistics |
 | `/export <id> [format]` | Export session (json/markdown) |
+| `/usage [detailed]` | Show token usage and cost estimates |
+| `/files <pattern>` | Load files into conversation context |
+| `/template [name]` | List or use conversation templates |
+| `/validate` | Validate current configuration |
 
 ## CLI Commands
 
@@ -381,6 +405,114 @@ Never run this command! It's often used as an example of what NOT to do.
 ╚══════════╧═══════════════════╧══════════════════╧══════════════════╝
 ```
 
+### Token Usage Tracking
+```
+💬 chat > /usage detailed
+
+📊 Token Usage Report
+════════════════════════════════════════════════════════════
+
+📈 Overall Statistics:
+   Total Requests: 42
+   Total Tokens: 125,340
+   Estimated Cost: $0.3756
+   Providers Used: 2
+
+🔢 By Provider:
+────────────────────────────────────────────────────────────
+
+openai:gpt-4-turbo-preview:
+   Requests: 25
+   Input Tokens: 45,230
+   Output Tokens: 35,120
+   Total Tokens: 80,350
+   Cost: $0.3012
+   First Used: Jan 15, 2024 10:30 AM
+   Last Used: Jan 15, 2024 3:45 PM
+   Avg Tokens/Request: 3,214
+
+anthropic:claude-3-5-sonnet-20241022:
+   Requests: 17
+   Input Tokens: 28,990
+   Output Tokens: 16,000
+   Total Tokens: 44,990
+   Cost: $0.0744
+```
+
+### File Context Loading
+```
+💬 chat > /files src/**/*.ts
+
+Loading files matching: src/**/*.ts
+
+✅ Loaded 8 file(s):
+  • src/cli.ts (145 lines)
+  • src/types.ts (89 lines)
+  • src/commands/handlers.ts (437 lines)
+  • src/services/chat.service.ts (184 lines)
+  • src/services/config.service.ts (142 lines)
+  • src/services/context.service.ts (305 lines)
+  • src/services/session.service.ts (223 lines)
+  • src/storage/session.storage.ts (267 lines)
+
+Total: 1,792 lines, 89.6 KB
+
+ℹ Files loaded into conversation context. You can now ask questions about them.
+
+💬 chat > Can you review the chat service for potential improvements?
+```
+
+### Conversation Templates
+```
+💬 chat > /template
+
+📝 Available Templates:
+
+DEBUGGING:
+  • Debug Error - Get help debugging an error message
+  • Fix Bug - Fix a specific bug in code
+
+DEVELOPMENT:
+  • Implement Feature - Implement a new feature
+  • API Integration - Help integrating with an API
+
+IMPROVEMENT:
+  • Refactor Code - Get suggestions for improving code
+  • Simplify Code - Make code simpler and more readable
+
+TESTING:
+  • Generate Tests - Generate unit tests for code
+
+💬 chat > /template debug
+
+📝 Template: Debug Error
+Description: Get help debugging an error message
+
+This template requires the following variables:
+  • {error}
+  • {code}
+
+Please fill in the variables and use the template in your next message.
+
+Template:
+I have an error in my code. Here's the error message:
+
+{error}
+
+And here's the relevant code:
+
+{code}
+
+Can you help me understand what's causing this error and how to fix it?
+```
+
+### Configuration Validation
+```
+💬 chat > /validate
+
+✓ Configuration is valid!
+```
+
 ## Advanced Features
 
 ### Context Awareness
@@ -476,21 +608,43 @@ warp-cli/
 │   ├── providers/          # LLM providers
 │   │   ├── base.provider.ts
 │   │   ├── ollama.provider.ts
-│   │   ├── openai.provider.ts
-│   │   ├── anthropic.provider.ts
-│   │   ├── gemini.provider.ts
+│   │   ├── openai.provider.ts (with rate limiting)
+│   │   ├── anthropic.provider.ts (with rate limiting)
+│   │   ├── gemini.provider.ts (with rate limiting)
 │   │   └── index.ts
 │   ├── services/           # Core services
-│   │   ├── chat.service.ts
-│   │   ├── config.service.ts
-│   │   ├── context.service.ts
-│   │   └── session.service.ts
+│   │   ├── chat.service.ts        # Chat management with token tracking
+│   │   ├── config.service.ts      # Configuration with validation
+│   │   ├── context.service.ts     # Context awareness
+│   │   ├── session.service.ts     # Session management
+│   │   ├── audit.service.ts       # Security audit logging
+│   │   ├── token-tracker.service.ts  # Token usage tracking
+│   │   └── file-context.service.ts   # File loading
 │   ├── storage/            # Data persistence
-│   │   └── session.storage.ts
+│   │   └── session.storage.ts (optimized queries)
+│   ├── templates/          # Conversation templates
+│   │   └── conversation-templates.ts
+│   ├── utils/              # Utilities
+│   │   ├── security.ts            # Input validation & sanitization
+│   │   ├── rate-limiter.ts        # Rate limiting & retry logic
+│   │   ├── error-handler.ts       # Enhanced error handling
+│   │   └── config-validator.ts    # Configuration validation
 │   └── ui/                 # Terminal UI
 │       └── renderer.ts
+├── .github/
+│   ├── workflows/
+│   │   └── ci.yml          # CI/CD pipeline
+│   └── ISSUE_TEMPLATE/     # Issue templates
+├── docs/                   # Documentation
+│   ├── SECURITY_COMPLIANCE.md
+│   ├── TEST_REPORT.md
+│   ├── WINDOWS_COMPATIBILITY.md
+│   └── IMPROVEMENTS.md
 ├── package.json
 ├── tsconfig.json
+├── .nvmrc                  # Node version pinning
+├── .editorconfig           # Editor configuration
+├── CONTRIBUTING.md         # Contribution guidelines
 └── README.md
 ```
 
@@ -515,8 +669,12 @@ MIT License - see LICENSE file for details
 
 ## Roadmap
 
+- [x] File context loading
+- [x] Token usage tracking
+- [x] Conversation templates
+- [x] Security enhancements (command validation, audit logging)
+- [x] Rate limiting and retry logic
 - [ ] Plugin system for extensions
-- [ ] File context loading
 - [ ] Code analysis tools
 - [ ] Multi-language support
 - [ ] Custom themes

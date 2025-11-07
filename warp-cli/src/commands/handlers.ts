@@ -4,6 +4,9 @@ import { chatService } from '../services/chat.service';
 import { configService } from '../services/config.service';
 import { contextService } from '../services/context.service';
 import { auditService } from '../services/audit.service';
+import { tokenTrackerService } from '../services/token-tracker.service';
+import { fileContextService } from '../services/file-context.service';
+import { getTemplate, listTemplates, getCategories, fillTemplate } from '../templates/conversation-templates';
 import { validateCommand, sanitizeArgument } from '../utils/security';
 import { format } from 'date-fns';
 
@@ -96,6 +99,22 @@ export class CommandHandler {
 
         case 'suggest':
           await this.handleSuggest(argsString);
+          break;
+
+        case 'usage':
+          await this.handleUsage(argsString);
+          break;
+
+        case 'files':
+          await this.handleFiles(argsString);
+          break;
+
+        case 'template':
+          await this.handleTemplate(argsString);
+          break;
+
+        case 'validate':
+          await this.handleValidate();
           break;
 
         default:
@@ -412,6 +431,101 @@ export class CommandHandler {
     }
 
     await chatService.suggestCommand(task);
+  }
+
+  private async handleUsage(args: string): Promise<void> {
+    const detailed = args.toLowerCase().includes('detailed') || args.toLowerCase().includes('-d');
+
+    const report = tokenTrackerService.getUsageReport(detailed);
+    uiRenderer.renderInfo(report);
+  }
+
+  private async handleFiles(pattern: string): Promise<void> {
+    if (!pattern) {
+      throw new Error('Please provide a file pattern (e.g., /files src/**/*.ts)');
+    }
+
+    const patterns = pattern.split(/\s+/).filter(p => p.length > 0);
+
+    uiRenderer.renderInfo(`Loading files matching: ${patterns.join(', ')}`);
+
+    const files = await fileContextService.loadFiles(patterns);
+
+    if (files.length === 0) {
+      uiRenderer.renderWarning('No files found matching the pattern(s).');
+      return;
+    }
+
+    const summary = fileContextService.getSummary(files);
+    uiRenderer.renderSuccess(summary);
+
+    // Add files to current session context
+    const formatted = fileContextService.formatFilesForContext(files);
+    sessionService.addMessage('system', formatted, {
+      type: 'file_context',
+      fileCount: files.length
+    });
+
+    uiRenderer.renderInfo('\nFiles loaded into conversation context. You can now ask questions about them.');
+  }
+
+  private async handleTemplate(args: string): Promise<void> {
+    if (!args) {
+      // List all templates
+      const templates = listTemplates();
+      const categories = getCategories();
+
+      uiRenderer.renderInfo('📝 Available Templates:\n');
+
+      for (const category of categories) {
+        const categoryTemplates = templates.filter(t => t.category === category);
+        if (categoryTemplates.length > 0) {
+          uiRenderer.renderInfo(`\n${category.toUpperCase()}:`);
+          for (const template of categoryTemplates) {
+            uiRenderer.renderInfo(`  • ${template.name} - ${template.description}`);
+          }
+        }
+      }
+
+      uiRenderer.renderInfo('\nUsage: /template <name>');
+      uiRenderer.renderInfo('Example: /template debug');
+      return;
+    }
+
+    const templateName = args.split(/\s+/)[0];
+    const template = getTemplate(templateName);
+
+    if (!template) {
+      throw new Error(`Template '${templateName}' not found. Use /template to list available templates.`);
+    }
+
+    // Show template and prompt for variables
+    uiRenderer.renderInfo(`\n📝 Template: ${template.name}`);
+    uiRenderer.renderInfo(`Description: ${template.description}\n`);
+
+    if (template.variables.length > 0) {
+      uiRenderer.renderInfo('This template requires the following variables:');
+      for (const variable of template.variables) {
+        uiRenderer.renderInfo(`  • {${variable}}`);
+      }
+      uiRenderer.renderInfo('\nPlease fill in the variables and use the template in your next message.');
+      uiRenderer.renderInfo(`\nTemplate:\n${template.prompt}`);
+    } else {
+      // No variables, can use directly
+      const prompt = fillTemplate(template, {});
+      await chatService.chat(prompt);
+    }
+  }
+
+  private async handleValidate(): Promise<void> {
+    const validation = configService.validateCurrentConfig();
+
+    if (validation.valid) {
+      uiRenderer.renderSuccess('✓ Configuration is valid!');
+    } else {
+      uiRenderer.renderError('✗ Configuration validation failed:\n');
+      uiRenderer.renderError(validation.errors);
+    }
   }
 }
 

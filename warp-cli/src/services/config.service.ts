@@ -2,6 +2,8 @@ import Conf from 'conf';
 import * as path from 'path';
 import * as os from 'os';
 import { Config } from '../types';
+import { maskSensitiveConfig } from '../utils/security';
+import { validateConfig, validateField, formatValidationErrors } from '../utils/config-validator';
 
 export class ConfigService {
   private config: Conf<Config>;
@@ -42,11 +44,19 @@ export class ConfigService {
   }
 
   set<K extends keyof Config>(key: K, value: Config[K]): void {
+    // Validate the new value
+    const validation = validateField(key, value);
+
+    if (!validation.valid) {
+      throw new Error(`Configuration validation failed:\n${formatValidationErrors(validation.errors)}`);
+    }
+
     this.config.set(key, value);
   }
 
-  getAll(): Config {
-    return this.config.store;
+  getAll(maskSensitive: boolean = true): Config {
+    const config = this.config.store;
+    return maskSensitive ? maskSensitiveConfig(config) : config;
   }
 
   reset(): void {
@@ -82,17 +92,49 @@ export class ConfigService {
     }
   }
 
-  exportConfig(): string {
-    return JSON.stringify(this.config.store, null, 2);
+  exportConfig(includeSensitive: boolean = false): string {
+    const config = includeSensitive ? this.config.store : maskSensitiveConfig(this.config.store);
+
+    if (includeSensitive) {
+      console.warn(
+        '\n⚠️  WARNING: This export contains sensitive data (API keys, tokens, etc.).\n' +
+        '⚠️  Do not share this output publicly or commit it to version control.\n'
+      );
+    }
+
+    return JSON.stringify(config, null, 2);
   }
 
   importConfig(configString: string): void {
     try {
       const importedConfig = JSON.parse(configString);
+
+      // Validate the imported config
+      const validation = validateConfig(importedConfig);
+
+      if (!validation.valid) {
+        throw new Error(`Configuration validation failed:\n${formatValidationErrors(validation.errors)}`);
+      }
+
       this.config.store = { ...this.defaultConfig, ...importedConfig };
-    } catch (error) {
-      throw new Error('Invalid configuration format');
+    } catch (error: any) {
+      if (error.message.includes('validation')) {
+        throw error;
+      }
+      throw new Error('Invalid configuration format: ' + error.message);
     }
+  }
+
+  /**
+   * Validate current configuration
+   * @returns Validation result
+   */
+  validateCurrentConfig(): { valid: boolean; errors: string } {
+    const validation = validateConfig(this.config.store);
+    return {
+      valid: validation.valid,
+      errors: formatValidationErrors(validation.errors)
+    };
   }
 }
 

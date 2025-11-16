@@ -5,6 +5,8 @@ import * as os from 'os';
 import { ContextData } from '../types';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { validateCommand, sanitizeErrorMessage } from '../utils/security';
+import { auditService } from './audit.service';
 
 const execAsync = promisify(exec);
 
@@ -204,24 +206,79 @@ export class ContextService {
   }
 
   async executeCommand(command: string): Promise<{ output: string; error?: string }> {
+    // Validate command before execution
+    const validation = validateCommand(command);
+
+    if (!validation.valid) {
+      const errorMsg = `Command validation failed: ${validation.error}`;
+
+      // Log security event
+      await auditService.logSecurityEvent(
+        'command_validation_failed',
+        `Attempted to execute invalid command: ${command}`,
+        'failure'
+      );
+
+      await auditService.logCommandExecution(
+        command,
+        'failure',
+        'Command validation failed',
+        validation.error
+      );
+
+      throw new Error(errorMsg);
+    }
+
     this.addCommand(command);
 
     try {
+      // Log command execution attempt
+      await auditService.logCommandExecution(
+        command,
+        'success',
+        `Executing in ${process.cwd()}`
+      );
+
       const { stdout, stderr } = await execAsync(command, {
         cwd: process.cwd(),
-        maxBuffer: 1024 * 1024 * 10 // 10MB
+        maxBuffer: 1024 * 1024 * 10, // 10MB
+        timeout: 30000, // 30 second timeout
+        env: {
+          ...process.env,
+          // Sanitize environment
+          NODE_ENV: process.env.NODE_ENV || 'production'
+        }
       });
 
       const output = stdout + (stderr || '');
       this.addOutput(output);
+
+      // Log successful execution
+      await auditService.logCommandExecution(
+        command,
+        stderr ? 'warning' : 'success',
+        `Output length: ${output.length} bytes`,
+        stderr || undefined
+      );
 
       return {
         output,
         error: stderr || undefined
       };
     } catch (error: any) {
-      const errorMsg = error.message || 'Command execution failed';
+      const sanitizedError = sanitizeErrorMessage(error.message || 'Command execution failed');
+      const errorMsg = `Command execution error: ${sanitizedError}`;
+
       this.addOutput(errorMsg);
+
+      // Log failed execution with context
+      await auditService.logCommandExecution(
+        command,
+        'failure',
+        `Execution failed in ${process.cwd()}`,
+        sanitizedError
+      );
+
       return {
         output: error.stdout || '',
         error: errorMsg

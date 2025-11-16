@@ -3,6 +3,11 @@ import { sessionService } from '../services/session.service';
 import { chatService } from '../services/chat.service';
 import { configService } from '../services/config.service';
 import { contextService } from '../services/context.service';
+import { auditService } from '../services/audit.service';
+import { tokenTrackerService } from '../services/token-tracker.service';
+import { fileContextService } from '../services/file-context.service';
+import { getTemplate, listTemplates, getCategories, fillTemplate } from '../templates/conversation-templates';
+import { validateCommand, sanitizeArgument } from '../utils/security';
 import { format } from 'date-fns';
 
 export class CommandHandler {
@@ -96,10 +101,44 @@ export class CommandHandler {
           await this.handleSuggest(argsString);
           break;
 
+        case 'usage':
+          await this.handleUsage(argsString);
+          break;
+
+        case 'files':
+          await this.handleFiles(argsString);
+          break;
+
+        case 'template':
+          await this.handleTemplate(argsString);
+          break;
+
+        case 'validate':
+          await this.handleValidate();
+          break;
+
         default:
           uiRenderer.renderError(`Unknown command: /${command}. Type /help for available commands.`);
       }
     } catch (error: any) {
+      // Provide contextual error information
+      const errorContext = {
+        command: command.toLowerCase(),
+        args: argsString,
+        timestamp: new Date().toISOString(),
+        cwd: process.cwd()
+      };
+
+      // Log the error with context
+      await auditService.log({
+        action: 'command_error',
+        resource: `/${command}`,
+        status: 'failure',
+        details: `Command failed with error: ${error.message}`,
+        error: error.message,
+        metadata: errorContext
+      });
+
       uiRenderer.renderError(error.message);
     }
 
@@ -134,6 +173,7 @@ export class CommandHandler {
   private async handleSave(name?: string): Promise<void> {
     const session = sessionService.getCurrentSession();
     if (!session) {
+      await auditService.logSessionOperation('save', 'none', 'failure', 'No active session');
       throw new Error('No active session to save');
     }
 
@@ -141,8 +181,14 @@ export class CommandHandler {
       session.name = name;
     }
 
-    await sessionService.saveCurrentSession();
-    uiRenderer.renderSuccess(`Session saved: ${session.name} (ID: ${session.id})`);
+    try {
+      await sessionService.saveCurrentSession();
+      await auditService.logSessionOperation('save', session.id, 'success');
+      uiRenderer.renderSuccess(`Session saved: ${session.name} (ID: ${session.id})`);
+    } catch (error: any) {
+      await auditService.logSessionOperation('save', session.id, 'failure', error.message);
+      throw error;
+    }
   }
 
   private async handleLoad(id: string): Promise<void> {
@@ -150,24 +196,32 @@ export class CommandHandler {
       throw new Error('Please provide a session ID. Use /list to see available sessions.');
     }
 
-    const session = await sessionService.loadSession(id);
-    if (!session) {
-      throw new Error(`Session not found: ${id}`);
-    }
+    try {
+      const session = await sessionService.loadSession(id);
+      if (!session) {
+        await auditService.logSessionOperation('load', id, 'failure', 'Session not found');
+        throw new Error(`Session not found: ${id}`);
+      }
 
-    uiRenderer.renderSuccess(`Loaded session: ${session.name}`);
-    uiRenderer.renderSessionInfo({
-      name: session.name,
-      messageCount: session.messages.length,
-      created: session.created
-    });
+      await auditService.logSessionOperation('load', id, 'success');
 
-    // Display recent messages
-    if (session.messages.length > 0) {
-      uiRenderer.renderInfo('Recent messages:');
-      session.messages.slice(-3).forEach(msg => {
-        uiRenderer.renderMessage(msg);
+      uiRenderer.renderSuccess(`Loaded session: ${session.name}`);
+      uiRenderer.renderSessionInfo({
+        name: session.name,
+        messageCount: session.messages.length,
+        created: session.created
       });
+
+      // Display recent messages
+      if (session.messages.length > 0) {
+        uiRenderer.renderInfo('Recent messages:');
+        session.messages.slice(-3).forEach(msg => {
+          uiRenderer.renderMessage(msg);
+        });
+      }
+    } catch (error: any) {
+      await auditService.logSessionOperation('load', id, 'failure', error.message);
+      throw error;
     }
   }
 
@@ -195,8 +249,14 @@ export class CommandHandler {
       throw new Error('Please provide a session ID to delete.');
     }
 
-    await sessionService.deleteSession(id);
-    uiRenderer.renderSuccess(`Session deleted: ${id}`);
+    try {
+      await sessionService.deleteSession(id);
+      await auditService.logSessionOperation('delete', id, 'success');
+      uiRenderer.renderSuccess(`Session deleted: ${id}`);
+    } catch (error: any) {
+      await auditService.logSessionOperation('delete', id, 'failure', error.message);
+      throw error;
+    }
   }
 
   private async handleSearch(query: string): Promise<void> {
@@ -285,11 +345,61 @@ export class CommandHandler {
       throw new Error('Please provide a command to execute.');
     }
 
+    // Validate command before execution
+    const validation = validateCommand(command);
+    if (!validation.valid) {
+      await auditService.logSecurityEvent(
+        'exec_validation_failed',
+        `User attempted to execute invalid command via /exec: ${command}`,
+        'failure'
+      );
+      throw new Error(`Security validation failed: ${validation.error}`);
+    }
+
+    // Log the exec command usage
+    await auditService.log({
+      action: 'exec_command',
+      resource: command,
+      status: 'success',
+      details: 'User executed command via /exec'
+    });
+
     await chatService.executeCommand(command);
   }
 
   private async handleGit(args: string): Promise<void> {
-    await chatService.executeCommand(`git ${args}`);
+    if (!args) {
+      throw new Error('Please provide git command arguments.');
+    }
+
+    // Sanitize git arguments to prevent command injection
+    const sanitizedArgs = args
+      .split(/\s+/)
+      .map(arg => sanitizeArgument(arg))
+      .join(' ');
+
+    const fullCommand = `git ${sanitizedArgs}`;
+
+    // Validate the full git command
+    const validation = validateCommand(fullCommand);
+    if (!validation.valid) {
+      await auditService.logSecurityEvent(
+        'git_validation_failed',
+        `User attempted to execute invalid git command: ${fullCommand}`,
+        'failure'
+      );
+      throw new Error(`Security validation failed: ${validation.error}`);
+    }
+
+    // Log git command usage
+    await auditService.log({
+      action: 'git_command',
+      resource: fullCommand,
+      status: 'success',
+      details: 'User executed git command via /git'
+    });
+
+    await chatService.executeCommand(fullCommand);
   }
 
   private async handleStats(): Promise<void> {
@@ -321,6 +431,101 @@ export class CommandHandler {
     }
 
     await chatService.suggestCommand(task);
+  }
+
+  private async handleUsage(args: string): Promise<void> {
+    const detailed = args.toLowerCase().includes('detailed') || args.toLowerCase().includes('-d');
+
+    const report = tokenTrackerService.getUsageReport(detailed);
+    uiRenderer.renderInfo(report);
+  }
+
+  private async handleFiles(pattern: string): Promise<void> {
+    if (!pattern) {
+      throw new Error('Please provide a file pattern (e.g., /files src/**/*.ts)');
+    }
+
+    const patterns = pattern.split(/\s+/).filter(p => p.length > 0);
+
+    uiRenderer.renderInfo(`Loading files matching: ${patterns.join(', ')}`);
+
+    const files = await fileContextService.loadFiles(patterns);
+
+    if (files.length === 0) {
+      uiRenderer.renderWarning('No files found matching the pattern(s).');
+      return;
+    }
+
+    const summary = fileContextService.getSummary(files);
+    uiRenderer.renderSuccess(summary);
+
+    // Add files to current session context
+    const formatted = fileContextService.formatFilesForContext(files);
+    sessionService.addMessage('system', formatted, {
+      type: 'file_context',
+      fileCount: files.length
+    });
+
+    uiRenderer.renderInfo('\nFiles loaded into conversation context. You can now ask questions about them.');
+  }
+
+  private async handleTemplate(args: string): Promise<void> {
+    if (!args) {
+      // List all templates
+      const templates = listTemplates();
+      const categories = getCategories();
+
+      uiRenderer.renderInfo('📝 Available Templates:\n');
+
+      for (const category of categories) {
+        const categoryTemplates = templates.filter(t => t.category === category);
+        if (categoryTemplates.length > 0) {
+          uiRenderer.renderInfo(`\n${category.toUpperCase()}:`);
+          for (const template of categoryTemplates) {
+            uiRenderer.renderInfo(`  • ${template.name} - ${template.description}`);
+          }
+        }
+      }
+
+      uiRenderer.renderInfo('\nUsage: /template <name>');
+      uiRenderer.renderInfo('Example: /template debug');
+      return;
+    }
+
+    const templateName = args.split(/\s+/)[0];
+    const template = getTemplate(templateName);
+
+    if (!template) {
+      throw new Error(`Template '${templateName}' not found. Use /template to list available templates.`);
+    }
+
+    // Show template and prompt for variables
+    uiRenderer.renderInfo(`\n📝 Template: ${template.name}`);
+    uiRenderer.renderInfo(`Description: ${template.description}\n`);
+
+    if (template.variables.length > 0) {
+      uiRenderer.renderInfo('This template requires the following variables:');
+      for (const variable of template.variables) {
+        uiRenderer.renderInfo(`  • {${variable}}`);
+      }
+      uiRenderer.renderInfo('\nPlease fill in the variables and use the template in your next message.');
+      uiRenderer.renderInfo(`\nTemplate:\n${template.prompt}`);
+    } else {
+      // No variables, can use directly
+      const prompt = fillTemplate(template, {});
+      await chatService.chat(prompt);
+    }
+  }
+
+  private async handleValidate(): Promise<void> {
+    const validation = configService.validateCurrentConfig();
+
+    if (validation.valid) {
+      uiRenderer.renderSuccess('✓ Configuration is valid!');
+    } else {
+      uiRenderer.renderError('✗ Configuration validation failed:\n');
+      uiRenderer.renderError(validation.errors);
+    }
   }
 }
 

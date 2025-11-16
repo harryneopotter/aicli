@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { BaseLLMProvider } from './base.provider';
 import { LLMConfig, Message } from '../types';
+import { rateLimiter, withRetry } from '../utils/rate-limiter';
 
 export class OpenAIProvider extends BaseLLMProvider {
   name = 'openai';
@@ -21,13 +22,18 @@ export class OpenAIProvider extends BaseLLMProvider {
 
     const effectiveConfig = this.getEffectiveConfig(config);
 
+    // Apply rate limiting (10 requests per minute for OpenAI)
+    await rateLimiter.throttle('openai', 10, 60000);
+
     try {
-      const response = await this.client.chat.completions.create({
-        model: effectiveConfig.model || 'gpt-4-turbo-preview',
-        messages: this.formatMessages(messages) as any,
-        temperature: effectiveConfig.temperature || 0.7,
-        max_tokens: effectiveConfig.maxTokens || 2000,
-        top_p: effectiveConfig.topP || 0.9
+      const response = await withRetry(async () => {
+        return await this.client!.chat.completions.create({
+          model: effectiveConfig.model || 'gpt-4-turbo-preview',
+          messages: this.formatMessages(messages) as any,
+          temperature: effectiveConfig.temperature || 0.7,
+          max_tokens: effectiveConfig.maxTokens || 2000,
+          top_p: effectiveConfig.topP || 0.9
+        });
       });
 
       return response.choices[0]?.message?.content || 'No response from OpenAI';
@@ -43,14 +49,19 @@ export class OpenAIProvider extends BaseLLMProvider {
 
     const effectiveConfig = this.getEffectiveConfig(config);
 
+    // Apply rate limiting
+    await rateLimiter.throttle('openai', 10, 60000);
+
     try {
-      const stream = await this.client.chat.completions.create({
-        model: effectiveConfig.model || 'gpt-4-turbo-preview',
-        messages: this.formatMessages(messages) as any,
-        temperature: effectiveConfig.temperature || 0.7,
-        max_tokens: effectiveConfig.maxTokens || 2000,
-        top_p: effectiveConfig.topP || 0.9,
-        stream: true
+      const stream = await withRetry(async () => {
+        return await this.client!.chat.completions.create({
+          model: effectiveConfig.model || 'gpt-4-turbo-preview',
+          messages: this.formatMessages(messages) as any,
+          temperature: effectiveConfig.temperature || 0.7,
+          max_tokens: effectiveConfig.maxTokens || 2000,
+          top_p: effectiveConfig.topP || 0.9,
+          stream: true
+        });
       });
 
       for await (const chunk of stream) {

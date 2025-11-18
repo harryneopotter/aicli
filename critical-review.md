@@ -13,7 +13,7 @@
 
 ## Executive Summary
 
-**Overall Assessment:** This is a **well-architected, feature-rich AI coding assistant** with solid design patterns and good developer experience. However, it has **critical security vulnerabilities** that have been addressed through the remediation work documented in SECURITY-REMEDIATION-LOG.md (2025-11-18).
+**Overall Assessment:** This is a **well-architected, feature-rich AI coding assistant** with solid design patterns and good developer experience. However, it had **critical security vulnerabilities** that have been addressed through the remediation work documented in SECURITY-REMEDIATION-LOG.md (2025-11-18).
 
 ### Strengths ✅
 - Excellent architecture with clean separation of concerns

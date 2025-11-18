@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { BaseLLMProvider } from './base.provider';
 import { LLMConfig, Message } from '../types';
+import { secureConfigService } from '../services/secure-config.service';
 
 export class OpenAIProvider extends BaseLLMProvider {
   name = 'openai';
@@ -8,10 +9,12 @@ export class OpenAIProvider extends BaseLLMProvider {
 
   async initialize(config: LLMConfig): Promise<void> {
     await super.initialize(config);
-    if (!config.apiKey) {
-      throw new Error('OpenAI API key is required');
+    // Fetch API key from secure storage
+    const apiKey = await secureConfigService.getApiKey('openai');
+    if (!apiKey) {
+      throw new Error('OpenAI API key is required. Please set it using the config command.');
     }
-    this.client = new OpenAI({ apiKey: config.apiKey });
+    this.client = new OpenAI({ apiKey });
   }
 
   async chat(messages: Message[], config?: Partial<LLMConfig>): Promise<string> {

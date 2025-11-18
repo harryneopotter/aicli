@@ -3,15 +3,18 @@ import boxen from 'boxen';
 import Table from 'cli-table3';
 import ora, { Ora } from 'ora';
 import { Message, UIRenderer } from '../types';
+import gradient from 'gradient-string';
+import highlight from 'cli-highlight';
 
-// Simple markdown-like formatting
+// Updated markdown formatter with syntax highlighting
 function formatMarkdown(text: string): string {
   let formatted = text;
 
-  // Code blocks
+  // Code blocks with syntax highlighting
   formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
+    const highlightedCode = highlight(code.trim(), { language: lang || 'plaintext', ignoreIllegals: true });
     return '\n' + chalk.gray('```') + (lang ? chalk.yellow(lang) : '') + '\n' +
-           chalk.white(code.trim()) + '\n' + chalk.gray('```') + '\n';
+           highlightedCode + '\n' + chalk.gray('```') + '\n';
   });
 
   // Inline code
@@ -34,18 +37,19 @@ export class WarpUIRenderer implements UIRenderer {
   }
 
   renderWelcome(): void {
-    const logo = `
+    const logo = gradient('cyan', 'pink').multiline(
+      `
  __      __  ___ ______  _____
- \\ \\    / / / _ \\| ___ \\|  __ \\
-  \\ \\  / / / /_\\ \\ |_/ /| |__) |
-   \\ \\/ /  |  _  ||    / |  ___/
-    \\  /   | | | || |\\ \\ | |
-     \\/    \\_| |_/\\_| \\_||_|
+ \ \    / / / _ \| ___ \|  __ \\
+  \ \  / / / /_\\ \ |_/ /| |__) |
+   \ \/ /  |  _  ||    / |  ___/
+    \  /   | | | || |\\ \ | |
+     \/    \_| |_/\_| \_||_|
 
-    AI Coding Assistant CLI
-    `;
+    AI Coding Assistant CLI`
+    );
 
-    console.log(chalk.cyan(logo));
+    console.log(logo);
     console.log(
       boxen(
         chalk.white(
@@ -64,9 +68,10 @@ export class WarpUIRenderer implements UIRenderer {
   }
 
   renderPrompt(mode: string = 'chat'): void {
-    const modeColor = mode === 'chat' ? chalk.cyan : chalk.yellow;
+    const gradientPrompt = gradient('cyan', 'magenta');
+    const modeLabel = gradientPrompt(mode.toUpperCase());
     const symbol = mode === 'chat' ? '💬' : '⚙️';
-    process.stdout.write(`\n${symbol}  ${modeColor(mode)} ${chalk.gray('>')} `);
+    process.stdout.write(`\n${symbol}  ${modeLabel} ${chalk.gray('>')} `);
   }
 
   renderMessage(message: Message): void {
@@ -83,25 +88,9 @@ export class WarpUIRenderer implements UIRenderer {
       system: '⚙️'
     };
 
-    const roleColor = roleColors[message.role];
-    const emoji = roleEmoji[message.role];
-
-    console.log('\n' + chalk.gray('─'.repeat(process.stdout.columns || 80)));
     console.log(
-      `${emoji}  ${roleColor.bold(message.role.toUpperCase())} ${chalk.gray(
-        `[${timestamp}]`
-      )}`
+      `${chalk.gray(`[${timestamp}]`)} ${roleEmoji[message.role]} ${roleColors[message.role](message.role)}: ${formatMarkdown(message.content)}`
     );
-
-    if (message.tokens) {
-      console.log(chalk.gray(`   Tokens: ${message.tokens}`));
-    }
-
-    console.log();
-
-    // Render content with markdown-like formatting
-    const rendered = formatMarkdown(message.content);
-    console.log(rendered);
   }
 
   renderError(error: string): void {
@@ -178,10 +167,24 @@ export class WarpUIRenderer implements UIRenderer {
   }
 
   renderCodeBlock(code: string, language?: string): void {
-    const languageLabel = language ? chalk.gray(`[${language}]`) : '';
+    const languageLabel = language ? chalk.gray(`[${language}]`) : chalk.gray('[code]');
+    const highlighted = highlight(code, {
+      language: language || 'plaintext',
+      ignoreIllegals: true,
+      theme: {
+        keyword: chalk.cyan,
+        built_in: chalk.magenta,
+        literal: chalk.blue,
+        string: chalk.green,
+        number: chalk.yellow,
+        comment: chalk.gray,
+        meta: chalk.cyanBright
+      }
+    });
+
     console.log('\n' + languageLabel);
     console.log(
-      boxen(code, {
+      boxen(highlighted, {
         padding: 1,
         borderStyle: 'round',
         borderColor: 'gray'
@@ -245,16 +248,24 @@ ${chalk.bold('Chat Commands:')}
   ${chalk.cyan('/load <id>')}         Load a session
   ${chalk.cyan('/list')}              List all sessions
   ${chalk.cyan('/delete <id>')}       Delete a session
+  ${chalk.cyan('/undo')}              Undo the last chat interaction
 
 ${chalk.bold('Configuration:')}
   ${chalk.cyan('/config')}            Show current configuration
   ${chalk.cyan('/provider <name>')}  Switch LLM provider (ollama, openai, anthropic, gemini)
   ${chalk.cyan('/model <name>')}     Set model for current provider
   ${chalk.cyan('/context')}          Show current context
+  ${chalk.cyan('/ctxfile <cmd>')}    Manage attached context files (add/remove/list)
 
 ${chalk.bold('Execution:')}
   ${chalk.cyan('/exec <command>')}   Execute a shell command
   ${chalk.cyan('/git <args>')}       Execute git command
+  ${chalk.cyan('/diff [--staged]')}  Show git diff for current repo
+
+${chalk.bold('Plugins & Tools:')}
+  ${chalk.cyan('/plugins')}          List installed plugins
+  ${chalk.cyan('/plugin <name>')}    Run a plugin with optional arguments
+  ${chalk.cyan('/autocomplete <p>')} Suggest commands/plugins for a prefix
 
 ${chalk.bold('Tips:')}
   • Just type naturally to chat with the AI
@@ -276,4 +287,3 @@ ${chalk.bold('Tips:')}
   }
 }
 
-export const uiRenderer = new WarpUIRenderer();

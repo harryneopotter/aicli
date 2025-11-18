@@ -1,6 +1,15 @@
-import fetch from 'node-fetch';
+import fetch, { type RequestInit } from 'node-fetch';
 import { BaseLLMProvider } from './base.provider';
 import { LLMConfig, Message } from '../types';
+import Bottleneck from 'bottleneck';
+
+const limiter = new Bottleneck({
+  maxConcurrent: 5,
+  minTime: 200
+});
+
+// Adjusted limitedFetch to use the correct arguments
+const limitedFetch = limiter.wrap((url: string, options: RequestInit) => fetch(url, options));
 
 export class OllamaProvider extends BaseLLMProvider {
   name = 'ollama';
@@ -10,7 +19,7 @@ export class OllamaProvider extends BaseLLMProvider {
     const endpoint = effectiveConfig.endpoint || 'http://localhost:11434';
 
     try {
-      const response = await fetch(`${endpoint}/api/chat`, {
+      const response = await limitedFetch(`${endpoint}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -41,7 +50,7 @@ export class OllamaProvider extends BaseLLMProvider {
     const endpoint = effectiveConfig.endpoint || 'http://localhost:11434';
 
     try {
-      const response = await fetch(`${endpoint}/api/chat`, {
+      const response = await limitedFetch(`${endpoint}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

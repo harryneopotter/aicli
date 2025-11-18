@@ -1,19 +1,40 @@
 import { Message, LLMConfig, LLMProvider } from '../types';
-import { providerFactory } from '../providers';
-import { sessionService } from './session.service';
-import { contextService } from './context.service';
-import { configService } from './config.service';
-import { uiRenderer } from '../ui/renderer';
+import { ProviderFactory } from '../providers';
+import { SessionService } from './session.service';
+import { ContextService } from './context.service';
+import { ConfigService } from './config.service';
+import { WarpUIRenderer } from '../ui/renderer';
+
+type ChatServiceDeps = {
+  providerFactory: ProviderFactory;
+  sessionService: SessionService;
+  contextService: ContextService;
+  configService: ConfigService;
+  uiRenderer: WarpUIRenderer;
+};
 
 export class ChatService {
   private currentProvider?: LLMProvider;
+  private readonly providerFactory: ProviderFactory;
+  private readonly sessionService: SessionService;
+  private readonly contextService: ContextService;
+  private readonly configService: ConfigService;
+  private readonly uiRenderer: WarpUIRenderer;
+
+  constructor({ providerFactory, sessionService, contextService, configService, uiRenderer }: ChatServiceDeps) {
+    this.providerFactory = providerFactory;
+    this.sessionService = sessionService;
+    this.contextService = contextService;
+    this.configService = configService;
+    this.uiRenderer = uiRenderer;
+  }
 
   async initialize(): Promise<void> {
-    await this.switchProvider(configService.get('defaultProvider'));
+    await this.switchProvider(this.configService.get('defaultProvider'));
   }
 
   async switchProvider(providerName: 'ollama' | 'openai' | 'anthropic' | 'gemini'): Promise<void> {
-    const providerConfig = configService.getProviderConfig(providerName);
+    const providerConfig = this.configService.getProviderConfig(providerName);
 
     if (!providerConfig) {
       throw new Error(`Provider ${providerName} is not configured`);
@@ -22,16 +43,14 @@ export class ChatService {
     const config: LLMConfig = {
       provider: providerName,
       model: (providerConfig as any).model,
-      apiKey: (providerConfig as any).apiKey,
       endpoint: (providerConfig as any).endpoint,
       temperature: 0.7,
       maxTokens: 2000,
       topP: 0.9
     };
 
-    this.currentProvider = await providerFactory.getProvider(config);
+    this.currentProvider = await this.providerFactory.getProvider(config);
 
-    // Check if provider is available
     const isAvailable = await this.currentProvider.isAvailable();
     if (!isAvailable) {
       throw new Error(`Provider ${providerName} is not available. Please check your configuration.`);
@@ -43,20 +62,17 @@ export class ChatService {
       throw new Error('No provider initialized');
     }
 
-    const session = sessionService.getCurrentSession();
+    const session = this.sessionService.getCurrentSession();
     if (!session) {
       throw new Error('No active session');
     }
 
-    // Add user message to session
-    const userMsg = sessionService.addMessage('user', userMessage);
-    uiRenderer.renderMessage(userMsg);
+    const userMsg = this.sessionService.addMessage('user', userMessage);
+    this.uiRenderer.renderMessage(userMsg);
 
-    // Build context and system prompt
-    const context = await contextService.getContext();
-    const systemPrompt = contextService.buildSystemPrompt(context);
+    const context = await this.contextService.getContext();
+    const systemPrompt = this.contextService.buildSystemPrompt(context);
 
-    // Prepare messages for LLM
     const messages: Message[] = [
       {
         id: 'system',
@@ -64,71 +80,67 @@ export class ChatService {
         content: systemPrompt,
         timestamp: new Date()
       },
-      ...sessionService.getLastNMessages(configService.get('context').maxHistory)
+      ...this.sessionService.getLastNMessages(this.configService.get('context').maxHistory)
     ];
 
     try {
       let response: string;
 
       if (options?.streaming && this.currentProvider.streamChat) {
-        // Streaming response
-        uiRenderer.startStreamingResponse();
+        this.uiRenderer.startStreamingResponse();
         const chunks: string[] = [];
 
         for await (const chunk of this.currentProvider.streamChat(messages)) {
           chunks.push(chunk);
-          uiRenderer.renderStreamingChunk(chunk);
+          this.uiRenderer.renderStreamingChunk(chunk);
         }
 
-        uiRenderer.endStreamingResponse();
+        this.uiRenderer.endStreamingResponse();
         response = chunks.join('');
       } else {
-        // Non-streaming response
-        uiRenderer.renderLoading('Thinking...');
+        this.uiRenderer.renderLoading('Thinking...');
         response = await this.currentProvider.chat(messages);
-        uiRenderer.stopLoading();
+        this.uiRenderer.stopLoading();
       }
 
-      // Add assistant response to session
-      const assistantMsg = sessionService.addMessage('assistant', response, {
+      const assistantMsg = this.sessionService.addMessage('assistant', response, {
         provider: this.currentProvider.name,
-        model: configService.get('defaultProvider')
+        model: this.configService.get('defaultProvider')
       });
 
       if (!options?.streaming) {
-        uiRenderer.renderMessage(assistantMsg);
+        this.uiRenderer.renderMessage(assistantMsg);
       }
 
       return response;
     } catch (error: any) {
-      uiRenderer.stopLoading();
+      this.uiRenderer.stopLoading();
       throw new Error(`Chat error: ${error.message}`);
     }
   }
 
   async executeCommand(command: string): Promise<void> {
-    uiRenderer.renderLoading(`Executing: ${command}`);
+    this.uiRenderer.renderLoading(`Executing: ${command}`);
 
     try {
-      const result = await contextService.executeCommand(command);
-      uiRenderer.stopLoading();
+      const result = await this.contextService.executeCommand(command);
+      this.uiRenderer.stopLoading();
 
       if (result.error) {
-        uiRenderer.renderWarning('Command completed with warnings');
+        this.uiRenderer.renderWarning('Command completed with warnings');
       }
 
-      uiRenderer.renderCodeBlock(result.output, 'shell');
+      this.uiRenderer.renderCodeBlock(result.output, 'shell');
 
-      // Add command and output to session context
-      sessionService.addMessage('system', `Command: ${command}\n\nOutput:\n${result.output}`, {
+      this.sessionService.addMessage('system', `Command: ${command}\n\nOutput:\n${result.output}`, {
         type: 'command_execution',
         command,
         output: result.output,
         error: result.error
       });
     } catch (error: any) {
-      uiRenderer.stopLoading();
-      uiRenderer.renderError(`Command execution failed: ${error.message}`);
+      this.uiRenderer.stopLoading();
+      this.uiRenderer.renderError(`Command execution failed: ${error.message}`);
     }
   }
 
@@ -151,11 +163,7 @@ export class ChatService {
     return this.currentProvider?.name || 'none';
   }
 
-  async checkProviderStatus(): Promise<{
-    provider: string;
-    available: boolean;
-    error?: string;
-  }> {
+  async checkProviderStatus(): Promise<{ provider: string; available: boolean; error?: string }> {
     if (!this.currentProvider) {
       return {
         provider: 'none',
@@ -179,5 +187,3 @@ export class ChatService {
     }
   }
 }
-
-export const chatService = new ChatService();

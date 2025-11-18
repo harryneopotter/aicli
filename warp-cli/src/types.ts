@@ -26,11 +26,26 @@ export interface SessionContext {
   projectType?: string;
   recentCommands: string[];
   environment: Record<string, string>;
-  files?: string[];
+  files?: ContextFileAttachment[];
+}
+
+export interface ContextFileAttachment {
+  path: string;
+  size: number;
+  preview: string;
+  updated: string;
+}
+
+export type ProviderName = 'ollama' | 'openai' | 'anthropic' | 'gemini';
+
+export interface ProviderSettings {
+  model?: string;
+  endpoint?: string;
+  apiKey?: string;
 }
 
 export interface LLMConfig {
-  provider: 'ollama' | 'openai' | 'anthropic' | 'gemini';
+  provider: ProviderName;
   model: string;
   apiKey?: string;
   endpoint?: string;
@@ -40,25 +55,8 @@ export interface LLMConfig {
 }
 
 export interface Config {
-  defaultProvider: 'ollama' | 'openai' | 'anthropic' | 'gemini';
-  providers: {
-    ollama?: {
-      endpoint: string;
-      model: string;
-    };
-    openai?: {
-      apiKey: string;
-      model: string;
-    };
-    anthropic?: {
-      apiKey: string;
-      model: string;
-    };
-    gemini?: {
-      apiKey: string;
-      model: string;
-    };
-  };
+  defaultProvider: ProviderName;
+  providers: Partial<Record<ProviderName, ProviderSettings>>;
   ui: {
     theme: 'dark' | 'light';
     markdown: boolean;
@@ -106,6 +104,7 @@ export interface ContextData {
     commands: string[];
     outputs: string[];
   };
+  files?: ContextFileAttachment[];
 }
 
 export interface CommandResult {
@@ -122,6 +121,27 @@ export interface StorageProvider {
   listSessions(): Promise<Session[]>;
   deleteSession(id: string): Promise<void>;
   searchSessions(query: string): Promise<Session[]>;
+}
+
+export interface PluginRunResult {
+  output?: string;
+  highlights?: string[];
+  metadata?: Record<string, any>;
+}
+
+export interface WarpPlugin {
+  name: string;
+  description: string;
+  version?: string;
+  author?: string;
+  run(args: string[], context: ContextData): Promise<PluginRunResult | string> | PluginRunResult | string;
+}
+
+export interface PluginSummary {
+  name: string;
+  description: string;
+  version?: string;
+  source: 'builtin' | 'external';
 }
 
 export interface UIRenderer {

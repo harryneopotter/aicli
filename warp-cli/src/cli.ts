@@ -2,11 +2,7 @@
 
 import { Command } from 'commander';
 import * as readline from 'readline';
-import { uiRenderer } from './ui/renderer';
-import { configService } from './services/config.service';
-import { sessionService } from './services/session.service';
-import { chatService } from './services/chat.service';
-import { commandHandler } from './commands/handlers';
+import { container } from './container';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as os from 'os';
@@ -14,6 +10,8 @@ import * as os from 'os';
 // Load environment variables
 dotenv.config();
 dotenv.config({ path: path.join(os.homedir(), '.warp-cli', '.env') });
+
+const { uiRenderer, configService, sessionService, chatService, commandHandler, pluginService } = container;
 
 const program = new Command();
 
@@ -68,6 +66,7 @@ program.action(async () => {
 
 async function startChatSession(options: any): Promise<void> {
   try {
+    await pluginService.initialize();
     // Initialize services
     await sessionService.initialize();
     await chatService.initialize();

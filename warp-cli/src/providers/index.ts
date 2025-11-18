@@ -41,6 +41,4 @@ export class ProviderFactory {
   }
 }
 
-export const providerFactory = new ProviderFactory();
-
 export { OllamaProvider, OpenAIProvider, AnthropicProvider, GeminiProvider };

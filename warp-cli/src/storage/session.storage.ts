@@ -1,7 +1,8 @@
 import sqlite3 from 'sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
-import { Session, Message, StorageProvider } from '../types';
+import { Session, Message, SessionContext, StorageProvider } from '../types';
+import { encrypt, decrypt } from '../utils/encryption';
 
 export class SessionStorage implements StorageProvider {
   private db?: sqlite3.Database;
@@ -112,8 +113,8 @@ export class SessionStorage implements StorageProvider {
         session.name,
         session.created.getTime(),
         session.updated.getTime(),
-        JSON.stringify(session.context),
-        session.metadata ? JSON.stringify(session.metadata) : null
+        this.encryptJson(session.context),
+        this.encryptJson(session.metadata)
       ]
     );
 
@@ -132,7 +133,7 @@ export class SessionStorage implements StorageProvider {
           message.content,
           message.timestamp.getTime(),
           message.tokens || null,
-          message.metadata ? JSON.stringify(message.metadata) : null
+          this.encryptJson(message.metadata)
         ]
       );
     }
@@ -172,7 +173,7 @@ export class SessionStorage implements StorageProvider {
       content: row.content,
       timestamp: new Date(row.timestamp),
       tokens: row.tokens || undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      metadata: this.decryptJson(row.metadata)
     }));
 
     return {
@@ -181,8 +182,8 @@ export class SessionStorage implements StorageProvider {
       created: new Date(sessionRow.created),
       updated: new Date(sessionRow.updated),
       messages,
-      context: JSON.parse(sessionRow.context),
-      metadata: sessionRow.metadata ? JSON.parse(sessionRow.metadata) : undefined
+      context: this.decryptContext(sessionRow.context),
+      metadata: this.decryptJson(sessionRow.metadata)
     };
   }
 
@@ -201,8 +202,8 @@ export class SessionStorage implements StorageProvider {
       created: new Date(row.created),
       updated: new Date(row.updated),
       messages: [], // Don't load messages for list view
-      context: JSON.parse(row.context),
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      context: this.decryptContext(row.context),
+      metadata: this.decryptJson(row.metadata)
     }));
   }
 
@@ -237,8 +238,8 @@ export class SessionStorage implements StorageProvider {
       created: new Date(row.created),
       updated: new Date(row.updated),
       messages: [],
-      context: JSON.parse(row.context),
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      context: this.decryptContext(row.context),
+      metadata: this.decryptJson(row.metadata)
     }));
   }
 
@@ -250,6 +251,40 @@ export class SessionStorage implements StorageProvider {
           else resolve();
         });
       });
+    }
+  }
+
+  private encryptJson(value?: Record<string, any> | SessionContext | null): string | null {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    return encrypt(JSON.stringify(value));
+  }
+
+  private decryptJson<T = Record<string, any>>(value?: string | null): T | undefined {
+    if (!value) return undefined;
+    try {
+      return JSON.parse(this.safeDecrypt(value)) as T;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private decryptContext(value?: string | null): SessionContext {
+    const context = value ? this.decryptJson<SessionContext>(value) : undefined;
+    if (context) return context;
+    return {
+      workingDirectory: '',
+      recentCommands: [],
+      environment: {}
+    };
+  }
+
+  private safeDecrypt(value: string): string {
+    try {
+      return decrypt(value);
+    } catch {
+      return value;
     }
   }
 }

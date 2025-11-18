@@ -1,6 +1,16 @@
-import fetch from 'node-fetch';
+import fetch, { type RequestInit } from 'node-fetch';
 import { BaseLLMProvider } from './base.provider';
 import { LLMConfig, Message } from '../types';
+import { secureConfigService } from '../services/secure-config.service';
+import Bottleneck from 'bottleneck';
+
+const limiter = new Bottleneck({
+  maxConcurrent: 5,
+  minTime: 200
+});
+
+// Adjusted limitedFetch to use the correct arguments
+const limitedFetch = limiter.wrap((url: string, options: RequestInit) => fetch(url, options));
 
 export class GeminiProvider extends BaseLLMProvider {
   name = 'gemini';
@@ -8,12 +18,14 @@ export class GeminiProvider extends BaseLLMProvider {
   async chat(messages: Message[], config?: Partial<LLMConfig>): Promise<string> {
     const effectiveConfig = this.getEffectiveConfig(config);
 
-    if (!effectiveConfig.apiKey) {
-      throw new Error('Gemini API key is required');
+    // Fetch API key from secure storage
+    const apiKey = await secureConfigService.getApiKey('gemini');
+    if (!apiKey) {
+      throw new Error('Gemini API key is required. Please set it using the config command.');
     }
 
     const model = effectiveConfig.model || 'gemini-1.5-flash';
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${effectiveConfig.apiKey}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
     // Convert messages to Gemini format
     const systemMessages = messages.filter(m => m.role === 'system');
@@ -33,9 +45,12 @@ export class GeminiProvider extends BaseLLMProvider {
     }
 
     try {
-      const response = await fetch(apiUrl, {
+      const response = await limitedFetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
         body: JSON.stringify({
           contents,
           generationConfig: {
@@ -66,15 +81,20 @@ export class GeminiProvider extends BaseLLMProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      if (!this.config?.apiKey) return false;
+      // Fetch API key from secure storage
+      const apiKey = await secureConfigService.getApiKey('gemini');
+      if (!apiKey) return false;
 
       // Test with a simple request
-      const model = this.config.model || 'gemini-1.5-flash';
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.config.apiKey}`;
+      const model = this.config?.model || 'gemini-1.5-flash';
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-      const response = await fetch(apiUrl, {
+      const response = await limitedFetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: 'test' }] }]
         })

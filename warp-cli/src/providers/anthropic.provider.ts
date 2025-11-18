@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { BaseLLMProvider } from './base.provider';
 import { LLMConfig, Message } from '../types';
+import { secureConfigService } from '../services/secure-config.service';
 
 export class AnthropicProvider extends BaseLLMProvider {
   name = 'anthropic';
@@ -8,10 +9,12 @@ export class AnthropicProvider extends BaseLLMProvider {
 
   async initialize(config: LLMConfig): Promise<void> {
     await super.initialize(config);
-    if (!config.apiKey) {
-      throw new Error('Anthropic API key is required');
+    // Fetch API key from secure storage
+    const apiKey = await secureConfigService.getApiKey('anthropic');
+    if (!apiKey) {
+      throw new Error('Anthropic API key is required. Please set it using the config command.');
     }
-    this.client = new Anthropic({ apiKey: config.apiKey });
+    this.client = new Anthropic({ apiKey });
   }
 
   async chat(messages: Message[], config?: Partial<LLMConfig>): Promise<string> {

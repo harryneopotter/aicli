@@ -2,17 +2,27 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ContextData } from '../types';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { ContextData, ContextFileAttachment } from '../types';
+import { execFile } from 'child_process';
+import * as readline from 'readline';
 
-const execAsync = promisify(exec);
+// Utility to sanitize error messages (redact secrets)
+export function sanitizeError(error: Error | any): string {
+  let message = error?.message || String(error);
+  // Remove API keys and tokens
+  message = message
+    .replace(/sk-[a-zA-Z0-9]{32,}/g, '[REDACTED]')
+    .replace(/Bearer [a-zA-Z0-9._-]+/g, 'Bearer [REDACTED]')
+    .replace(/api[_-]?key[=:][a-zA-Z0-9]+/gi, 'api_key=[REDACTED]');
+  return message;
+}
 
 export class ContextService {
   private git: SimpleGit;
   private commandHistory: string[] = [];
   private outputHistory: string[] = [];
   private maxHistory = 50;
+  private attachments: ContextFileAttachment[] = [];
 
   constructor() {
     this.git = simpleGit();
@@ -27,7 +37,8 @@ export class ContextService {
       history: {
         commands: this.commandHistory.slice(-10),
         outputs: this.outputHistory.slice(-5)
-      }
+      },
+      files: this.listAttachedFiles()
     };
 
     // Try to get git info
@@ -51,6 +62,67 @@ export class ContextService {
     }
 
     return context;
+  }
+
+  async attachFile(filePath: string, options?: { maxPreviewLines?: number }): Promise<ContextFileAttachment> {
+    if (!filePath) {
+      throw new Error('Please provide a file path to attach.');
+    }
+
+    const resolved = path.resolve(process.cwd(), filePath);
+    const stats = await fs.promises.stat(resolved);
+    if (!stats.isFile()) {
+      throw new Error('Only regular files can be attached to context.');
+    }
+
+    const preview = await this.getFilePreview(resolved, options?.maxPreviewLines ?? 20);
+    const attachment: ContextFileAttachment = {
+      path: path.relative(process.cwd(), resolved) || path.basename(resolved),
+      size: stats.size,
+      preview,
+      updated: stats.mtime.toISOString()
+    };
+
+    this.attachments = this.attachments.filter(item => item.path !== attachment.path);
+    this.attachments.push(attachment);
+    return attachment;
+  }
+
+  listAttachedFiles(): ContextFileAttachment[] {
+    return [...this.attachments];
+  }
+
+  removeAttachedFile(identifier: string): boolean {
+    if (!identifier) return false;
+    const normalized = this.normalizeAttachmentId(identifier);
+    const before = this.attachments.length;
+    this.attachments = this.attachments.filter(item => {
+      const itemId = item.path.toLowerCase();
+      const basename = path.basename(item.path).toLowerCase();
+      return itemId !== normalized && basename !== normalized;
+    });
+    return before !== this.attachments.length;
+  }
+
+  clearAttachedFiles(): void {
+    this.attachments = [];
+  }
+
+  async getDiff(target?: string, options: { staged?: boolean; context?: number } = {}): Promise<string> {
+    const isRepo = await this.git.checkIsRepo();
+    if (!isRepo) {
+      throw new Error('Diff is only available inside a git repository.');
+    }
+
+    const args = ['diff'];
+    if (options.staged) args.push('--staged');
+    if (options.context !== undefined) args.push(`-U${options.context}`);
+    if (target) {
+      args.push('--', target);
+    }
+
+    const diff = await this.git.raw(args);
+    return diff.trim() || 'No changes detected.';
   }
 
   private async getSystemInfo() {
@@ -203,30 +275,79 @@ export class ContextService {
     this.outputHistory = [];
   }
 
+  // Whitelisted commands for /exec
+  private static ALLOWED_COMMANDS = [
+    'ls', 'pwd', 'cat', 'echo', 'whoami', 'date', 'git', 'npm', 'yarn', 'pnpm', 'node', 'python', 'python3', 'pip', 'pip3', 'cargo', 'go', 'java', 'javac', 'npx', 'tsc', 'make', 'gcc', 'g++', 'clang', 'docker', 'grep', 'find', 'head', 'tail', 'du', 'df', 'free', 'top', 'htop', 'ps', 'kill', 'uname', 'which', 'whereis', 'tree', 'stat', 'chmod', 'chown', 'curl', 'wget', 'ifconfig', 'ip', 'ping', 'traceroute', 'ssh', 'scp', 'rsync', 'zip', 'unzip', 'tar', 'gzip', 'bzip2', 'xz'
+  ];
+
+  // Added logging for executed commands
+  private logCommandExecution(command: string): void {
+    console.log(`[Command Execution] ${command}`);
+  }
+
   async executeCommand(command: string): Promise<{ output: string; error?: string }> {
     this.addCommand(command);
+    this.logCommandExecution(command); // Log the command execution
+
+    // Parse command and args
+    const [cmd, ...args] = command.trim().split(/\s+/);
+    if (!ContextService.ALLOWED_COMMANDS.includes(cmd)) {
+      const errorMsg = `Command not allowed: ${cmd}`;
+      this.addOutput(errorMsg);
+      return { output: '', error: errorMsg };
+    }
+
+    // Ask for user confirmation for potentially dangerous commands
+    if (["rm", "mv", "dd", "shutdown", "reboot", "kill", "chmod", "chown"].includes(cmd)) {
+      const confirmed = await this.promptConfirm(`Are you sure you want to execute: ${command}? (y/N): `);
+      if (!confirmed) {
+        const msg = 'Command cancelled by user.';
+        this.addOutput(msg);
+        return { output: msg };
+      }
+    }
 
     try {
-      const { stdout, stderr } = await execAsync(command, {
-        cwd: process.cwd(),
-        maxBuffer: 1024 * 1024 * 10 // 10MB
+      const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        execFile(cmd, args, {
+          cwd: process.cwd(),
+          maxBuffer: 1024 * 1024 * 10,
+          timeout: 10000
+        }, (error, stdout, stderr) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve({ stdout, stderr });
+          }
+        });
       });
-
-      const output = stdout + (stderr || '');
+      const output = result.stdout + (result.stderr || '');
       this.addOutput(output);
-
       return {
         output,
-        error: stderr || undefined
+        error: result.stderr || undefined
       };
     } catch (error: any) {
-      const errorMsg = error.message || 'Command execution failed';
+      const errorMsg = sanitizeError(error) || 'Command execution failed';
       this.addOutput(errorMsg);
       return {
-        output: error.stdout || '',
+        output: '',
         error: errorMsg
       };
     }
+  }
+
+  private async promptConfirm(message: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+      rl.question(message, (answer) => {
+        rl.close();
+        resolve(/^y(es)?$/i.test(answer.trim()));
+      });
+    });
   }
 
   buildSystemPrompt(context: ContextData): string {
@@ -259,6 +380,13 @@ export class ContextService {
       });
     }
 
+    if (context.files && context.files.length > 0) {
+      prompt += `\nAttached Files:\n`;
+      context.files.forEach((file, idx) => {
+        prompt += `${idx + 1}. ${file.path} (${file.size} bytes)\n`;
+      });
+    }
+
     prompt += `\nCapabilities:\n`;
     prompt += `- Answer coding questions\n`;
     prompt += `- Explain commands and errors\n`;
@@ -269,6 +397,28 @@ export class ContextService {
 
     return prompt;
   }
-}
 
-export const contextService = new ContextService();
+  private async getFilePreview(filePath: string, maxLines: number): Promise<string> {
+    const handle = await fs.promises.open(filePath, 'r');
+    try {
+      const stats = await handle.stat();
+      const maxBytes = 200_000;
+      const length = Math.min(stats.size, maxBytes);
+      const buffer = Buffer.alloc(length);
+      await handle.read(buffer, 0, length, 0);
+      return buffer
+        .toString('utf8')
+        .split(/\r?\n/)
+        .slice(0, maxLines)
+        .join('\n');
+    } finally {
+      await handle.close();
+    }
+  }
+
+  private normalizeAttachmentId(identifier: string): string {
+    const resolved = path.resolve(process.cwd(), identifier);
+    const relative = path.relative(process.cwd(), resolved);
+    return relative ? relative.toLowerCase() : path.basename(resolved).toLowerCase();
+  }
+}

@@ -1,30 +1,36 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Session, Message, SessionContext } from '../types';
 import { SessionStorage } from '../storage/session.storage';
-import { contextService } from './context.service';
-import { configService } from './config.service';
+import { ContextService } from './context.service';
+import { ConfigService } from './config.service';
 
 export class SessionService {
   private currentSession?: Session;
   private storage: SessionStorage;
   private autosaveInterval?: NodeJS.Timeout;
+  private contextService: ContextService;
+  private configService: ConfigService;
 
-  constructor() {
-    const sessionDir = configService.getSessionDirectory();
-    this.storage = new SessionStorage(sessionDir);
+  constructor({ contextService, configService, storage }: {
+    contextService: ContextService;
+    configService: ConfigService;
+    storage: SessionStorage;
+  }) {
+    this.contextService = contextService;
+    this.configService = configService;
+    this.storage = storage;
   }
 
   async initialize(): Promise<void> {
     await this.storage.initialize();
-
     // Start autosave if enabled
-    if (configService.get('session').autosave) {
+    if (this.configService.get('session').autosave) {
       this.startAutosave();
     }
   }
 
   async createSession(name?: string): Promise<Session> {
-    const context = await contextService.getContext();
+    const context = await this.contextService.getContext();
 
     const session: Session = {
       id: uuidv4(),
@@ -95,6 +101,29 @@ export class SessionService {
     return message;
   }
 
+  undoLastInteraction(): { removed: Message[] } {
+    if (!this.currentSession) {
+      throw new Error('No active session');
+    }
+
+    if (this.currentSession.messages.length === 0) {
+      throw new Error('No messages to undo.');
+    }
+
+    const removed: Message[] = [];
+    do {
+      const msg = this.currentSession.messages.pop();
+      if (!msg) break;
+      removed.push(msg);
+      if (msg.role === 'user') {
+        break;
+      }
+    } while (this.currentSession.messages.length > 0);
+
+    this.currentSession.updated = new Date();
+    return { removed: removed.reverse() };
+  }
+
   getMessages(): Message[] {
     return this.currentSession?.messages || [];
   }
@@ -114,18 +143,33 @@ export class SessionService {
   async updateContext(): Promise<void> {
     if (!this.currentSession) return;
 
-    const context = await contextService.getContext();
+    const context = await this.contextService.getContext();
     this.currentSession.context = this.convertContextToSessionContext(context);
   }
 
   private convertContextToSessionContext(context: any): SessionContext {
+    // Only allow a safe subset of environment variables
+    const SAFE_ENV_VARS = ['PATH', 'HOME', 'SHELL', 'USER', 'LOGNAME', 'LANG', 'PWD', 'TERM'];
+    const safeEnv: Record<string, string> = {};
+    for (const key of SAFE_ENV_VARS) {
+      if (process.env[key]) safeEnv[key] = process.env[key] as string;
+    }
+    const MAX_PREVIEW = 2000;
     return {
       workingDirectory: context.cwd,
       gitBranch: context.git?.branch,
       gitStatus: context.git?.status,
       projectType: context.project?.type,
       recentCommands: context.history.commands,
-      environment: process.env as Record<string, string>
+      environment: safeEnv,
+      files: context.files?.map((file: any) => ({
+        path: file.path,
+        size: file.size,
+        updated: file.updated,
+        preview: typeof file.preview === 'string' && file.preview.length > MAX_PREVIEW
+          ? `${file.preview.slice(0, MAX_PREVIEW)}…`
+          : file.preview
+      }))
     };
   }
 
@@ -214,12 +258,10 @@ export class SessionService {
   async cleanup(): Promise<void> {
     this.stopAutosave();
 
-    if (this.currentSession && configService.get('session').autosave) {
+    if (this.currentSession && this.configService.get('session').autosave) {
       await this.saveCurrentSession();
     }
 
     await this.storage.close();
   }
 }
-
-export const sessionService = new SessionService();

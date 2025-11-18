@@ -1268,9 +1268,6 @@ process.on('SIGTERM', async () => {
 - Learning/experimentation
 - Local development
 - Non-sensitive codebases
-- Local development
-- Non-sensitive codebases
-
 ⚠️ **ADDITIONAL TESTING RECOMMENDED** for:
 - Production systems
 - Sensitive codebases

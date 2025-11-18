@@ -1,7 +1,7 @@
 # AI CLI - Comprehensive Code Review
 
 **Review Date:** 2025-11-17
-**Reviewer:** Claude (Automated Security & Quality Analysis)
+**Reviewer:** Claude (AI-assisted Security & Quality Analysis, with human oversight)
 **Scope:** Complete codebase analysis (Warp CLI + Tabby AI Agent)
 
 ---

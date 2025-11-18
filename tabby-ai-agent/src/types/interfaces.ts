@@ -77,12 +77,11 @@ export interface ConfigStore {
   };
 }
 
-export interface DebugContext {
+export type DebugContext = {
   input?: string;
   mode?: string;
   timestamp?: string;
-  [key: string]: unknown;
-}
+} & Record<string, unknown>;
 
 export interface ErrorContext {
   message: string;

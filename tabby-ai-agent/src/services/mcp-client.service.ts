@@ -705,27 +705,51 @@ export class MCPClientService {
 
   private validateServerConfig(config: MCPServerConfig): void {
     // Validate command whitelist
+    // Only 'npx' and 'node' are allowed by default for security.
+    // To use custom MCP server binaries, users should wrap them in a node script.
     const ALLOWED_COMMANDS = new Set(['npx', 'node']);
     if (!ALLOWED_COMMANDS.has(config.command)) {
-      throw new Error(`Disallowed command: ${config.command}`);
+      throw new Error(
+        `Security: Command '${config.command}' is not allowed. ` +
+        `Only 'npx' and 'node' are permitted. ` +
+        `To run custom executables, wrap them in a Node.js script.`
+      );
     }
 
     // Validate arguments for shell injection patterns
-    const DANGEROUS_PATTERNS = [
-      /[;&|`$(){}[\]\\]/,  // Shell metacharacters
-      /\.\./,              // Directory traversal
-      /^\s*-/,             // Suspicious flags
-    ];
+    const SHELL_METACHARACTERS = /[;&|`$(){}[\]\\]/;  // Shell metacharacters
+    const DIRECTORY_TRAVERSAL = /\.\./;              // Directory traversal
+    
+    // Dangerous flags that could lead to arbitrary code execution
+    const DANGEROUS_FLAGS = new Set([
+      '--eval', '-e',           // Execute arbitrary code
+      '--print', '-p',          // Execute and print
+      '--check',                // Can be chained with eval
+      '--inspect-brk',          // Debugging flags that could expose internals
+      '--inspect',
+      '--experimental-loader', // Load arbitrary code
+      '--loader',
+    ]);
 
     for (const arg of config.args) {
       if (typeof arg !== 'string') {
         throw new Error('All arguments must be strings');
       }
       
-      for (const pattern of DANGEROUS_PATTERNS) {
-        if (pattern.test(arg)) {
-          throw new Error(`Potentially dangerous argument detected: ${arg}`);
-        }
+      // Check for shell metacharacters
+      if (SHELL_METACHARACTERS.test(arg)) {
+        throw new Error(`Shell metacharacters detected in argument: ${arg}`);
+      }
+      
+      // Check for directory traversal
+      if (DIRECTORY_TRAVERSAL.test(arg)) {
+        throw new Error(`Directory traversal pattern detected in argument: ${arg}`);
+      }
+      
+      // Check for dangerous flags
+      const argLower = arg.toLowerCase();
+      if (DANGEROUS_FLAGS.has(argLower)) {
+        throw new Error(`Dangerous flag detected: ${arg}`);
       }
       
       // Prevent excessively long arguments
@@ -742,8 +766,12 @@ export class MCPClientService {
         }
         
         // Prevent shell injection in env vars
-        if (DANGEROUS_PATTERNS.some(pattern => pattern.test(key) || pattern.test(value))) {
-          throw new Error(`Potentially dangerous environment variable: ${key}`);
+        if (SHELL_METACHARACTERS.test(key) || SHELL_METACHARACTERS.test(value)) {
+          throw new Error(`Shell metacharacters detected in environment variable: ${key}`);
+        }
+        
+        if (DIRECTORY_TRAVERSAL.test(key) || DIRECTORY_TRAVERSAL.test(value)) {
+          throw new Error(`Directory traversal pattern detected in environment variable: ${key}`);
         }
       }
     }

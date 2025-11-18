@@ -157,7 +157,6 @@ export class AIAgentService {
 
   private buildSystemPrompt(context: ContextInfo): string {
     const contextWindow = this.config.store.aiAgent?.contextWindow || 4000;
-    // Note: autoResponse configuration is available but not used in this function
     
     let prompt = `You are an AI assistant integrated into a terminal environment. Be concise and helpful.\n\n`;
     

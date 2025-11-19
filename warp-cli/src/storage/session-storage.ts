@@ -1,14 +1,14 @@
-import sqlite3 from 'sqlite3';
-import * as path from 'path';
-import * as fs from 'fs';
-import { Session, Message, StorageProvider } from '../types';
+import Database from "better-sqlite3";
+import * as path from "path";
+import * as fs from "fs";
+import { Session, Message, StorageProvider } from "../types";
 
 export class SessionStorage implements StorageProvider {
-  private db?: sqlite3.Database;
+  private db?: Database.Database;
   private dbPath: string;
 
   constructor(storagePath: string) {
-    this.dbPath = path.join(storagePath, 'sessions.db');
+    this.dbPath = path.join(storagePath, "sessions.db");
   }
 
   async initialize(): Promise<void> {
@@ -19,46 +19,30 @@ export class SessionStorage implements StorageProvider {
     }
 
     // Open database
-    this.db = await new Promise<sqlite3.Database>((resolve, reject) => {
-      const db = new sqlite3.Database(this.dbPath, (err) => {
-        if (err) reject(err);
-        else resolve(db);
-      });
-    });
+    this.db = new Database(this.dbPath);
+    this.db.pragma("foreign_keys = ON");
 
     // Create tables
     await this.createTables();
   }
 
   private runAsync(sql: string, params: any[] = []): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db!.run(sql, params, (err: Error | null) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    this.db!.prepare(sql).run(...params);
+    return Promise.resolve();
   }
 
   private getAsync(sql: string, params: any[] = []): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.db!.get(sql, params, (err: Error | null, row: any) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
+    const row = this.db!.prepare(sql).get(...params);
+    return Promise.resolve(row);
   }
 
   private allAsync(sql: string, params: any[] = []): Promise<any[]> {
-    return new Promise((resolve, reject) => {
-      this.db!.all(sql, params, (err: Error | null, rows: any[]) => {
-        if (err) reject(err);
-        else resolve(rows || []);
-      });
-    });
+    const rows = this.db!.prepare(sql).all(...params);
+    return Promise.resolve(rows || []);
   }
 
   private async createTables(): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
     await this.runAsync(`
       CREATE TABLE IF NOT EXISTS sessions (
@@ -101,7 +85,7 @@ export class SessionStorage implements StorageProvider {
   }
 
   async saveSession(session: Session): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
     // Save session
     await this.runAsync(
@@ -113,12 +97,14 @@ export class SessionStorage implements StorageProvider {
         session.created.getTime(),
         session.updated.getTime(),
         JSON.stringify(session.context),
-        session.metadata ? JSON.stringify(session.metadata) : null
-      ]
+        session.metadata ? JSON.stringify(session.metadata) : null,
+      ],
     );
 
     // Delete existing messages for this session
-    await this.runAsync(`DELETE FROM messages WHERE session_id = ?`, [session.id]);
+    await this.runAsync(`DELETE FROM messages WHERE session_id = ?`, [
+      session.id,
+    ]);
 
     // Save messages
     for (const message of session.messages) {
@@ -132,8 +118,8 @@ export class SessionStorage implements StorageProvider {
           message.content,
           message.timestamp.getTime(),
           message.tokens || null,
-          message.metadata ? JSON.stringify(message.metadata) : null
-        ]
+          message.metadata ? JSON.stringify(message.metadata) : null,
+        ],
       );
     }
 
@@ -145,17 +131,21 @@ export class SessionStorage implements StorageProvider {
          ?,
          ?
        )`,
-      [session.id, session.name, session.messages.map(m => m.content).join(' ')]
+      [
+        session.id,
+        session.name,
+        session.messages.map((m) => m.content).join(" "),
+      ],
     );
   }
 
   async loadSession(id: string): Promise<Session | null> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
     // Load session
     const sessionRow: any = await this.getAsync(
       `SELECT * FROM sessions WHERE id = ?`,
-      [id]
+      [id],
     );
 
     if (!sessionRow) return null;
@@ -163,16 +153,16 @@ export class SessionStorage implements StorageProvider {
     // Load messages
     const messageRows: any[] = await this.allAsync(
       `SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp ASC`,
-      [id]
+      [id],
     );
 
-    const messages: Message[] = messageRows.map(row => ({
+    const messages: Message[] = messageRows.map((row) => ({
       id: row.id,
       role: row.role,
       content: row.content,
       timestamp: new Date(row.timestamp),
       tokens: row.tokens || undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
     }));
 
     return {
@@ -182,32 +172,34 @@ export class SessionStorage implements StorageProvider {
       updated: new Date(sessionRow.updated),
       messages,
       context: JSON.parse(sessionRow.context),
-      metadata: sessionRow.metadata ? JSON.parse(sessionRow.metadata) : undefined
+      metadata: sessionRow.metadata
+        ? JSON.parse(sessionRow.metadata)
+        : undefined,
     };
   }
 
   async listSessions(): Promise<Session[]> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
     const rows: any[] = await this.allAsync(
       `SELECT id, name, created, updated, context, metadata
        FROM sessions
-       ORDER BY updated DESC`
+       ORDER BY updated DESC`,
     );
 
-    return rows.map(row => ({
+    return rows.map((row) => ({
       id: row.id,
       name: row.name,
       created: new Date(row.created),
       updated: new Date(row.updated),
       messages: [], // Don't load messages for list view
       context: JSON.parse(row.context),
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
     }));
   }
 
   async deleteSession(id: string): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
     await this.runAsync(`DELETE FROM messages WHERE session_id = ?`, [id]);
     await this.runAsync(`DELETE FROM sessions WHERE id = ?`, [id]);
@@ -215,12 +207,12 @@ export class SessionStorage implements StorageProvider {
       `DELETE FROM sessions_fts WHERE rowid = (
         SELECT rowid FROM sessions WHERE id = ?
       )`,
-      [id]
+      [id],
     );
   }
 
   async searchSessions(query: string): Promise<Session[]> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) throw new Error("Database not initialized");
 
     const rows: any[] = await this.allAsync(
       `SELECT s.id, s.name, s.created, s.updated, s.context, s.metadata
@@ -228,28 +220,24 @@ export class SessionStorage implements StorageProvider {
        JOIN sessions_fts fts ON s.rowid = fts.rowid
        WHERE sessions_fts MATCH ?
        ORDER BY rank`,
-      [query]
+      [query],
     );
 
-    return rows.map(row => ({
+    return rows.map((row) => ({
       id: row.id,
       name: row.name,
       created: new Date(row.created),
       updated: new Date(row.updated),
       messages: [],
       context: JSON.parse(row.context),
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
     }));
   }
 
   async close(): Promise<void> {
     if (this.db) {
-      await new Promise<void>((resolve, reject) => {
-        this.db!.close((err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+      this.db.close();
+      this.db = undefined;
     }
   }
 }

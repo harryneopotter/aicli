@@ -16,7 +16,7 @@ export class GeminiProvider extends BaseLLMProvider {
     }
 
     const model = effectiveConfig.model || "gemini-1.5-flash";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${effectiveConfig.apiKey}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
     // Convert messages to Gemini format
     const systemMessages = messages.filter((m) => m.role === "system");
@@ -42,7 +42,10 @@ export class GeminiProvider extends BaseLLMProvider {
     try {
       const response = await fetch(apiUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${effectiveConfig.apiKey}`
+        },
         body: JSON.stringify({
           contents,
           generationConfig: {

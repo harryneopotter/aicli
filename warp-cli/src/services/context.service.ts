@@ -2,11 +2,7 @@ import { simpleGit, SimpleGit } from "simple-git";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { exec } from "child_process";
-import { promisify } from "util";
 import type { ContextData } from "../types";
-
-const execAsync = promisify(exec);
 
 type CommandResult = { output: string; error?: string };
 
@@ -72,34 +68,44 @@ export class ContextService {
     return context;
   }
 
+  // Whitelisted commands for /exec
+  private static ALLOWED_COMMANDS = [
+    'ls', 'pwd', 'cat', 'echo', 'whoami', 'date', 'git', 'npm', 'yarn', 'pnpm', 'node', 'python', 'python3', 'pip', 'pip3', 'cargo', 'go', 'java', 'javac', 'npx', 'tsc', 'make', 'gcc', 'g++', 'clang', 'docker', 'grep', 'find', 'head', 'tail', 'du', 'df', 'free', 'top', 'htop', 'ps', 'kill', 'uname', 'which', 'whereis', 'tree', 'stat', 'chmod', 'chown', 'curl', 'wget', 'ifconfig', 'ip', 'ping', 'traceroute', 'ssh', 'scp', 'rsync', 'zip', 'unzip', 'tar', 'gzip', 'bzip2', 'xz'
+  ];
+
+  private logCommandExecution(command: string): void {
+    console.log(`[Command Execution] ${command}`);
+  }
+
   async executeCommand(command: string): Promise<CommandResult> {
+    this.addCommand(command);
+    this.logCommandExecution(command);
+
     const trimmed = command.trim();
-    if (!trimmed) {
-      const errorMsg = "Command rejected: no executable provided.";
-      this.addOutput(errorMsg);
-      return { output: "", error: errorMsg };
-    }
-
-    this.addCommand(trimmed);
-
     const tokens = this.tokenizeCommand(trimmed);
     if (tokens.length === 0) {
-      const errorMsg = "Command rejected: unable to parse executable.";
-      this.addOutput(errorMsg);
-      return { output: "", error: errorMsg };
+      return { output: "", error: "No command provided" };
     }
 
-    const commandName = tokens[0].toLowerCase();
+    const cmd = tokens[0].toLowerCase();
 
-    if (commandName === "rm" || commandName === "del") {
+    // Feature: Safe Delete
+    if (cmd === "rm" || cmd === "del") {
       return this.handleSafeDelete(tokens);
     }
 
+    // Security: Whitelist
+    if (!ContextService.ALLOWED_COMMANDS.includes(cmd)) {
+      const errorMsg = `Command not allowed: ${cmd}`;
+      this.addOutput(errorMsg);
+      return { output: '', error: errorMsg };
+    }
+
+    // Security: Path Validation
     try {
       this.validateCommandPaths(tokens.slice(1));
     } catch (error: any) {
-      const errorMsg =
-        error?.message || "Command blocked for security reasons.";
+      const errorMsg = error?.message || "Command blocked for security reasons.";
       this.addOutput(errorMsg);
       return { output: "", error: errorMsg };
     }
@@ -254,9 +260,8 @@ export class ContextService {
       summaries.push(summary);
     }
 
-    const header = `Safe delete completed. Items relocated to ${
-      path.relative(projectRoot, stagingDir) || ".not-needed"
-    }:`;
+    const header = `Safe delete completed. Items relocated to ${path.relative(projectRoot, stagingDir) || ".not-needed"
+      }:`;
     return [header, ...summaries].join("\n");
   }
 
@@ -317,10 +322,21 @@ export class ContextService {
   }
 
   private async runShellCommand(command: string): Promise<CommandResult> {
+    const [cmd, ...args] = command.trim().split(/\s+/);
+
     try {
-      const { stdout, stderr } = await execAsync(command, {
-        cwd: process.cwd(),
-        maxBuffer: 10 * 1024 * 1024,
+      const { stdout, stderr } = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        // @ts-ignore - execFile is imported from child_process
+        import('child_process').then(({ execFile }) => {
+          execFile(cmd, args, {
+            cwd: process.cwd(),
+            maxBuffer: 10 * 1024 * 1024,
+            timeout: 10000
+          }, (error, stdout, stderr) => {
+            if (error) reject(error);
+            else resolve({ stdout, stderr });
+          });
+        });
       });
 
       const output = stdout + (stderr || "");

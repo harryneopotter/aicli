@@ -5,6 +5,7 @@
 .vscode/
 .mcp/
 update/
+agents/
 
 # Ignore db files
 *.db

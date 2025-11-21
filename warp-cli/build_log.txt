@@ -1,0 +1,31 @@
+
+> warp-cli@1.0.0 build
+> tsc
+
+src/services/training.service.ts(130,3): error TS1434: Unexpected keyword or identifier.
+src/services/training.service.ts(130,29): error TS1005: ',' expected.
+src/services/training.service.ts(130,38): error TS1005: ';' expected.
+src/services/training.service.ts(130,52): error TS1109: Expression expected.
+src/services/training.service.ts(131,11): error TS1005: ':' expected.
+src/services/training.service.ts(131,51): error TS1005: ',' expected.
+src/services/training.service.ts(132,9): error TS1003: Identifier expected.
+src/services/training.service.ts(136,5): error TS1005: ',' expected.
+src/services/training.service.ts(136,11): error TS1005: ':' expected.
+src/services/training.service.ts(136,57): error TS1005: ',' expected.
+src/services/training.service.ts(137,11): error TS1005: ',' expected.
+src/services/training.service.ts(137,13): error TS1005: ',' expected.
+src/services/training.service.ts(137,51): error TS1005: ',' expected.
+src/services/training.service.ts(139,11): error TS1005: ':' expected.
+src/services/training.service.ts(148,5): error TS1005: ',' expected.
+src/services/training.service.ts(150,11): error TS1005: ':' expected.
+src/services/training.service.ts(156,19): error TS1005: ',' expected.
+src/services/training.service.ts(158,11): error TS1005: ':' expected.
+src/services/training.service.ts(158,61): error TS1005: ',' expected.
+src/services/training.service.ts(160,11): error TS1005: ':' expected.
+src/services/training.service.ts(160,64): error TS1005: ',' expected.
+src/services/training.service.ts(161,11): error TS1005: ',' expected.
+src/services/training.service.ts(161,13): error TS1005: ',' expected.
+src/services/training.service.ts(161,52): error TS1005: ',' expected.
+src/services/training.service.ts(163,15): error TS1005: ',' expected.
+src/services/training.service.ts(163,110): error TS1005: ',' expected.
+src/services/training.service.ts(166,1): error TS1128: Declaration or statement expected.

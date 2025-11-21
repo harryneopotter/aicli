@@ -125,7 +125,7 @@ export class TrainingService {
       return [];
     }
   }
-}
+
 
   async exportToPersona(name: string): Promise<void> {
     const playbook = await this.loadPlaybook(name);

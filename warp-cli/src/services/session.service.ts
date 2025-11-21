@@ -123,13 +123,20 @@ export class SessionService {
   }
 
   private convertContextToSessionContext(context: any): SessionContext {
+    // Only allow a safe subset of environment variables
+    const SAFE_ENV_VARS = ['PATH', 'HOME', 'SHELL', 'USER', 'LOGNAME', 'LANG', 'PWD', 'TERM'];
+    const safeEnv: Record<string, string> = {};
+    for (const key of SAFE_ENV_VARS) {
+      if (process.env[key]) safeEnv[key] = process.env[key] as string;
+    }
+
     return {
       workingDirectory: context.cwd,
       gitBranch: context.git?.branch,
       gitStatus: context.git?.status,
       projectType: context.project?.type,
       recentCommands: context.history.commands,
-      environment: process.env as Record<string, string>,
+      environment: safeEnv,
     };
   }
 

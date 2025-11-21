@@ -1,0 +1,10 @@
+
+> warp-cli@1.0.0 build
+> tsc
+
+src/commands/handlers.ts(590,10): error TS2304: Cannot find name 'fs'.
+src/commands/handlers.ts(596,27): error TS2304: Cannot find name 'fs'.
+src/commands/handlers.ts(606,29): error TS2304: Cannot find name 'fs'.
+src/commands/handlers.ts(619,13): error TS2304: Cannot find name 'fs'.
+src/commands/handlers.ts(627,12): error TS2304: Cannot find name 'fs'.
+src/commands/handlers.ts(642,13): error TS2304: Cannot find name 'fs'.

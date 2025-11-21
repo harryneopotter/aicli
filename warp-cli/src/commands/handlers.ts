@@ -8,6 +8,7 @@ import { analysisService, AnalysisResult } from "../services/analysis.service";
 import chalk from "chalk";
 import { agentService } from "../services/agent.service";
 import * as path from "path";
+import * as fs from "fs";
 import { trainingService } from "../services/training.service";
 
 export class CommandHandler {

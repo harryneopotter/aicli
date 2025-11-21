@@ -1,8 +1,8 @@
-import { v4 as uuidv4 } from 'uuid';
-import { Session, Message, SessionContext } from '../types';
-import { SessionStorage } from '../storage/session.storage';
-import { contextService } from './context.service';
-import { configService } from './config.service';
+import { v4 as uuidv4 } from "uuid";
+import { Session, Message, SessionContext } from "../types";
+import { SessionStorage } from "../storage/session-storage";
+import { contextService } from "./context.service";
+import { configService } from "./config.service";
 
 export class SessionService {
   private currentSession?: Session;
@@ -18,7 +18,7 @@ export class SessionService {
     await this.storage.initialize();
 
     // Start autosave if enabled
-    if (configService.get('session').autosave) {
+    if (configService.get("session").autosave) {
       this.startAutosave();
     }
   }
@@ -32,7 +32,7 @@ export class SessionService {
       created: new Date(),
       updated: new Date(),
       messages: [],
-      context: this.convertContextToSessionContext(context)
+      context: this.convertContextToSessionContext(context),
     };
 
     this.currentSession = session;
@@ -49,7 +49,7 @@ export class SessionService {
 
   async saveCurrentSession(): Promise<void> {
     if (!this.currentSession) {
-      throw new Error('No active session to save');
+      throw new Error("No active session to save");
     }
 
     this.currentSession.updated = new Date();
@@ -76,9 +76,13 @@ export class SessionService {
     return this.currentSession;
   }
 
-  addMessage(role: 'user' | 'assistant' | 'system', content: string, metadata?: Record<string, any>): Message {
+  addMessage(
+    role: "user" | "assistant" | "system",
+    content: string,
+    metadata?: Record<string, any>,
+  ): Message {
     if (!this.currentSession) {
-      throw new Error('No active session');
+      throw new Error("No active session");
     }
 
     const message: Message = {
@@ -86,7 +90,7 @@ export class SessionService {
       role,
       content,
       timestamp: new Date(),
-      metadata
+      metadata,
     };
 
     this.currentSession.messages.push(message);
@@ -125,7 +129,7 @@ export class SessionService {
       gitStatus: context.git?.status,
       projectType: context.project?.type,
       recentCommands: context.history.commands,
-      environment: process.env as Record<string, string>
+      environment: process.env as Record<string, string>,
     };
   }
 
@@ -136,7 +140,7 @@ export class SessionService {
         try {
           await this.saveCurrentSession();
         } catch (error) {
-          console.error('Autosave failed:', error);
+          console.error("Autosave failed:", error);
         }
       }
     }, 30000);
@@ -149,13 +153,16 @@ export class SessionService {
     }
   }
 
-  async exportSession(id: string, format: 'json' | 'markdown' = 'json'): Promise<string> {
+  async exportSession(
+    id: string,
+    format: "json" | "markdown" = "json",
+  ): Promise<string> {
     const session = await this.storage.loadSession(id);
     if (!session) {
-      throw new Error('Session not found');
+      throw new Error("Session not found");
     }
 
-    if (format === 'json') {
+    if (format === "json") {
       return JSON.stringify(session, null, 2);
     } else {
       // Markdown format
@@ -164,7 +171,7 @@ export class SessionService {
       markdown += `Updated: ${session.updated.toLocaleString()}\n\n`;
       markdown += `## Messages\n\n`;
 
-      session.messages.forEach(msg => {
+      session.messages.forEach((msg) => {
         markdown += `### ${msg.role.toUpperCase()} (${msg.timestamp.toLocaleTimeString()})\n\n`;
         markdown += `${msg.content}\n\n`;
         markdown += `---\n\n`;
@@ -186,7 +193,7 @@ export class SessionService {
     let oldestSession: Date | undefined;
     let newestSession: Date | undefined;
 
-    sessions.forEach(session => {
+    sessions.forEach((session) => {
       if (!oldestSession || session.created < oldestSession) {
         oldestSession = session.created;
       }
@@ -207,14 +214,14 @@ export class SessionService {
       totalSessions: sessions.length,
       totalMessages,
       oldestSession,
-      newestSession
+      newestSession,
     };
   }
 
   async cleanup(): Promise<void> {
     this.stopAutosave();
 
-    if (this.currentSession && configService.get('session').autosave) {
+    if (this.currentSession && configService.get("session").autosave) {
       await this.saveCurrentSession();
     }
 

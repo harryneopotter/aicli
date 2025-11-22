@@ -72,7 +72,7 @@ import * as path from 'path';
  */
 export class CommandValidator {
   // Dangerous characters that could enable command injection
-  private static readonly DANGEROUS_CHARS = /[;&|`$()<>]/;
+  private static readonly DANGEROUS_CHARS = /[;&|`$()<>#\n\r\0]/;
 
   // Maximum argument length to prevent buffer overflow
   private static readonly MAX_ARG_LENGTH = 2048;
@@ -481,7 +481,7 @@ The `rm` and `del` commands move files to `.not-needed/` instead of deleting.
 
 ## Reporting Security Issues
 
-Please report security vulnerabilities to: [security@example.com]
+Please report security vulnerabilities to: security@aicli.dev
 
 Do NOT open public GitHub issues for security vulnerabilities.
 ```

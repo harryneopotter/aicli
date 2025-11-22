@@ -2,7 +2,7 @@
 
 **Project:** AiCli
 **Document Version:** 1.0
-**Date:** 2025-11-22
+**Date:** 2024-11-22
 **Status:** Ready for Planning
 **Owner:** Product & Engineering Teams
 
@@ -615,7 +615,7 @@ export class ErrorHandler {
   private static readonly SENSITIVE_PATTERNS = [
     // API keys
     /sk-[a-zA-Z0-9]{32,}/g,
-    /sk-ant-[a-zA-Z0-9-]{95}/g,
+    /sk-ant-[a-zA-Z0-9-]+/g,
 
     // File paths (partial)
     /\/home\/[^\/\s]+/g,
@@ -822,7 +822,28 @@ export class ErrorHandler {
       [ErrorCode.FILE_PATH_TRAVERSAL]: 'Use relative paths within the project',
     };
 
-    return suggestions[error.code] || 'Use /help for more information';
+    // Contextual fallback suggestions
+    if (suggestions[error.code]) {
+      return suggestions[error.code];
+    }
+    // Example: contextual fallback based on error code prefix/category
+    if (String(error.code).startsWith('AUTH_')) {
+      return 'Check your authentication credentials and provider setup.';
+    }
+    if (String(error.code).startsWith('PROVIDER_')) {
+      return 'Verify provider configuration and network connectivity.';
+    }
+    if (String(error.code).startsWith('SESSION_')) {
+      return 'Ensure the session exists and is active.';
+    }
+    if (String(error.code).startsWith('COMMAND_')) {
+      return 'Check command syntax or permissions.';
+    }
+    if (String(error.code).startsWith('FILE_')) {
+      return 'Check file path and permissions.';
+    }
+    // Default fallback
+    return 'Check your configuration or contact support for assistance.';
   }
 }
 
@@ -1045,7 +1066,7 @@ describe('ErrorHandler', () => {
 For unlisted errors or persistent issues:
 1. Check logs: `~/.aicli/logs/`
 2. Run with debug: `DEBUG=* aicli chat`
-3. Report issue: https://github.com/user/aicli/issues
+3. Report issue: https://github.com/<owner>/aicli/issues
 ```
 
 ### Acceptance Criteria
@@ -1110,7 +1131,7 @@ export const commandSchema = z.string()
   .min(1, 'Command cannot be empty')
   .max(2048, 'Command too long')
   .refine(
-    (cmd) => !/[;&|`$]/.test(cmd),
+    (cmd) => !/[;&|`$#\n\r\0]/.test(cmd),
     'Command contains dangerous characters'
   );
 
@@ -1163,6 +1184,8 @@ export const providerConfigSchema = z.object({
 });
 
 // Session schemas
+// Note: id field assumes UUID format. If your implementation uses a different
+// ID format (e.g., nanoid, sequential IDs), update the validator accordingly.
 export const sessionMetadataSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(200),
@@ -1590,28 +1613,28 @@ class TelemetryService {
 
 ## Long-term Roadmap (6-12 Months)
 
-### Q1 2025: Stability & Performance
+### Q1 2026: Stability & Performance
 - Complete P0-P2 items
 - Achieve 90%+ test coverage
 - Performance benchmarks
 - Security audit
 
-### Q2 2025: Extensibility
+### Q2 2026: Extensibility
 - Plugin system (P3-001)
 - Telemetry & Analytics (P3-002)
 - Interactive improvements (P3-003)
 - Code review mode (P3-004)
 
-### Q3 2025: Enterprise Features
+### Q3 2026: Enterprise Features
 - Multi-user support (P3-006)
 - Team collaboration
 - RBAC (Role-Based Access Control)
 - SSO integration
 
-### Q4 2025: Advanced AI
+### Q4 2026: Advanced AI
 - Fine-tuning capabilities
 - Custom model training
-- Advanced RAG (reranking, hybrid search)
+- Advanced RAG (re-ranking, hybrid search)
 - Agentic workflows
 
 ---

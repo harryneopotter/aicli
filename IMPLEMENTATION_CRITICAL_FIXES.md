@@ -2,7 +2,7 @@
 
 **Project:** AiCli
 **Document Version:** 1.0
-**Date:** 2025-11-22
+**Date:** 2024-11-22
 **Status:** Ready for Implementation
 **Owner:** Engineering Team
 
@@ -72,7 +72,7 @@ import * as path from 'path';
  */
 export class CommandValidator {
   // Dangerous characters that could enable command injection
-  private static readonly DANGEROUS_CHARS = /[;&|`$()<>]/;
+  private static readonly DANGEROUS_CHARS = /[;&|`$()<>\n\r]/;
 
   // Maximum argument length to prevent buffer overflow
   private static readonly MAX_ARG_LENGTH = 2048;
@@ -481,7 +481,7 @@ The `rm` and `del` commands move files to `.not-needed/` instead of deleting.
 
 ## Reporting Security Issues
 
-Please report security vulnerabilities to: [security@example.com]
+Please report security vulnerabilities to: security@aicli.dev
 
 Do NOT open public GitHub issues for security vulnerabilities.
 ```

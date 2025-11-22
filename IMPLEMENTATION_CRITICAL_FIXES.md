@@ -220,18 +220,7 @@ export class CommandValidator {
     return errors;
   }
 
-  /**
-   * Escape argument for shell execution (defense in depth)
-   */
-  static escapeArgument(arg: string): string {
-    // If already quoted, return as is
-    if (this.isQuotedString(arg)) {
-      return arg;
-    }
-
-    // Escape special characters
-    return arg.replace(/(["\s'$`\\])/g, '\\$1');
-  }
+  // Removed escapeArgument method: not needed for execFile with shell: false
 }
 
 interface ValidationResult {

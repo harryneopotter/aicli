@@ -615,7 +615,7 @@ export class ErrorHandler {
   private static readonly SENSITIVE_PATTERNS = [
     // API keys
     /sk-[a-zA-Z0-9]{32,}/g,
-    /sk-ant-[a-zA-Z0-9-]{95}/g,
+    /sk-ant-[a-zA-Z0-9-]+/g,
 
     // File paths (partial)
     /\/home\/[^\/\s]+/g,

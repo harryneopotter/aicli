@@ -15,7 +15,7 @@ AiCli is an advanced, AI-powered command-line interface designed for developer p
 - **Learning**: Train your agents with the `/train` command to create reusable playbooks and strategies.
 
 ### 🛠️ Core Functionality
-- **Multi-Provider**: Support for Ollama (local), OpenAI, Anthropic, and Gemini.
+- **Multi-Provider**: Support for Ollama (local), OpenAI, Anthropic, Gemini, and GLM-4 (ZhipuAI).
 - **Context Awareness**: Automatically captures working directory, git status, and project type.
 - **Session Management**: Save, load, search, and export your chat sessions.
 - **Interactive Onboarding**: First-run setup wizard with skip option.
@@ -58,6 +58,127 @@ The agent can autonomously use the following tools:
 - `read_file`: Read file contents.
 - `write_file`: Create or overwrite files.
 - `list_files`: List directory contents.
+- `search_code`: Semantic search through the codebase (requires `/index` first).
+- `log_activity`: Log significant activities to project documentation.
+
+### Project Memory (Auto-Docs)
+AiCli maintains persistent project memory through automatic documentation:
+
+**Initialize Documentation:**
+```bash
+/docs init
+```
+
+This creates a `.aicli` directory with:
+- `design.md` - Project design and architecture
+- `changelog.md` - Detailed changelog with timestamps
+- `changes.md` - Quick index of recent changes
+- `agent.md` - Rules and guidelines for the AI agent
+
+**View Documentation:**
+```bash
+/docs view design      # View design documentation
+
+## Model Context Protocol (MCP)
+
+AiCli can connect to GLM‑4’s exclusive MCP servers to enable advanced capabilities:
+
+- **Vision** – image analysis via a local stdio child process (`npx @z_ai/mcp-server`).
+- **Web Search** – remote HTTP service (`https://api.z.ai/api/mcp/web_search_prime/mcp`).
+- **Web Reader** – remote HTTP service (`https://api.z.ai/api/mcp/web_reader/mcp`).
+
+When you select the **GLM‑4** provider, the CLI automatically connects to these MCP servers and registers the corresponding tools (`vision`, `web_search`, `web_reader`). You can also manage them manually:
+
+```bash
+/mcp connect      # start all GLM MCP servers
+/mcp disconnect   # stop them
+```
+
+The tools are available like any other AiCli tool and can be invoked via the normal tool‑calling flow. Tests (`test_mcp.ts`) verify connection, tool listing, and execution.
+
+/docs view changelog   # View full changelog
+/docs view changes     # View recent changes
+/docs view agent       # View agent rules
+```
+
+**How It Works:**
+- The AI agent automatically receives project rules and recent changes in its context
+- Agents can log activities using the `log_activity` tool
+- Documentation persists across sessions for better context awareness
+
+**Example - Agent Logging Activity:**
+The agent can document its work automatically:
+```xml
+<tool_code>
+{
+  "name": "log_activity",
+  "arguments": {
+    "title": "Implemented User Authentication",
+    "details": "Added JWT-based authentication with bcrypt password hashing",
+    "files": ["src/auth/auth.service.ts", "src/auth/jwt.strategy.ts"]
+  }
+}
+</tool_code>
+```
+
+### Semantic Code Search
+Index your codebase for intelligent semantic search:
+```bash
+/index                 # Index the current project
+```
+
+Then the agent can use `search_code` tool to find relevant code snippets.
+
+## Configuration
+
+### API Key Management
+
+AiCli supports **three methods** for providing API keys, with the following priority order:
+
+1. **Environment Variables** (Highest Priority) - Best for development, CI/CD, and Docker
+2. **System Keychain** - Secure storage via `keytar` (recommended for local use)
+3. **Config File** - Legacy method (automatically migrated to keychain)
+
+#### Using Environment Variables
+
+Set environment variables for your preferred provider:
+
+```bash
+# OpenAI
+export OPENAI_API_KEY="your-api-key-here"
+
+# Anthropic
+export ANTHROPIC_API_KEY="your-api-key-here"
+
+# Gemini
+export GEMINI_API_KEY="your-api-key-here"
+
+# GLM-4 (ZhipuAI)
+export GLM_API_KEY="your-api-key-here"
+```
+
+**Windows (PowerShell):**
+```powershell
+$env:GLM_API_KEY="your-api-key-here"
+```
+
+**Docker:**
+```bash
+docker run -e GLM_API_KEY="your-key" your-aicli-image
+```
+
+#### Using the Keychain (Recommended for Local Use)
+
+During the interactive setup wizard or via commands:
+```bash
+/provider gemini
+# Follow prompts to securely store API key in system keychain
+```
+
+### Configuration Files
+
+Configuration is stored in `~/.aicli/config.json` (encrypted where applicable).
+API keys stored via keychain are NOT in this file (they're in your system's secure keychain).
 
 ## Project Structure
 

@@ -1,53 +1,77 @@
-# AI CLI - Tabby AI Agent Plugin
+# AiCli
 
-## Overview
+AiCli is an advanced, AI-powered command-line interface designed for developer productivity. It integrates secure agentic capabilities, allowing you to interact with LLMs (Ollama, OpenAI, Anthropic, Gemini) directly from your terminal with full context awareness.
 
-This project, `aicli`, contains the `tabby-ai-agent` plugin for Tabby, an AI-assisted terminal integration. It enables natural language processing in the terminal, leveraging Model Context Protocol (MCP) servers for enhanced functionality like context management and AI interactions (e.g., with Ollama or Gemini API).
+## Key Features
 
-Key features:
-- Intercepts terminal input to distinguish commands from natural language queries.
-- Builds dynamic system prompts with context (e.g., working directory, git status).
-- Integrates MCP tools for advanced operations.
-- Modular services for AI agent logic, context management, and MCP client handling.
+### 🔒 Security First
+- **Keychain Integration**: API keys are securely stored in your system's keychain (using `keytar`), not in plain text config files.
+- **Session Encryption**: All session data (chat history, context) is encrypted at rest using AES-256-GCM.
+- **Safe Execution**: Shell commands via `/exec` are whitelisted and validated to prevent accidental damage.
+
+### 🤖 Agentic Capabilities
+- **Agent Personas**: Switch between specialized agents (e.g., "Coder", "Writer") defined in markdown files.
+- **Autonomous Tool Use**: Agents can autonomously execute commands, read/write files, and list directories to solve complex tasks.
+- **Learning**: Train your agents with the `/train` command to create reusable playbooks and strategies.
+
+### 🛠️ Core Functionality
+- **Multi-Provider**: Support for Ollama (local), OpenAI, Anthropic, and Gemini.
+- **Context Awareness**: Automatically captures working directory, git status, and project type.
+- **Session Management**: Save, load, search, and export your chat sessions.
+- **Interactive Onboarding**: First-run setup wizard with skip option.
 
 ## Installation
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/harryneopotter/aicli.git
-   cd aicli
-   ```
+```bash
+git clone https://github.com/harryneopotter/aicli.git
+cd aicli
+npm install
+npm run build
+```
 
-2. Install dependencies in `tabby-ai-agent`:
-   ```bash
-   cd tabby-ai-agent
-   npm install
-   ```
+## First Run
 
-3. Install MCP servers:
-   ```bash
-   node scripts/install-mcp-servers.js
-   ```
+On your first launch, AiCli will offer an interactive setup wizard:
+- **Provider Selection**: Choose between Ollama (local), OpenAI, Anthropic, or Gemini.
+- **API Key Setup**: Securely store your API keys in the system keychain.
+- **Preferences**: Configure streaming and other UI options.
 
-4. Build the plugin:
-   ```bash
-   npm run build
-   ```
-
-5. Integrate with Tabby: Follow Tabby's plugin installation guide to add the built plugin.
+You can skip the wizard and run `aicli setup` later if you prefer.
 
 ## Usage
 
-- Open a terminal in Tabby.
-- Type natural language queries (e.g., "What's my current directory?")—the AI agent will respond.
-- Regular commands are executed normally.
-- Configure AI models and API keys in relevant services.
+Start the CLI:
+```bash
+npm start
+```
 
-## Development
+### Common Commands
+- `/help`: Show available commands.
+- `/agent [name]`: Switch agent persona (e.g., `/agent coder`).
+- `/exec "command"`: Execute a shell command safely.
+- `/train`: Train the agent on Q&A pairs to improve performance.
+- `/config`: Manage settings and providers.
 
-- Source code is in `tabby-ai-agent/src/`.
-- Build with `npm run build` (uses Webpack).
-- For fixes and improvements, see `tabby-ai-agent/PLAN.md`.
+### Agent Calling (Tool Use)
+The agent can autonomously use the following tools:
+- `exec`: Run shell commands.
+- `read_file`: Read file contents.
+- `write_file`: Create or overwrite files.
+- `list_files`: List directory contents.
+
+## Project Structure
+
+```
+aicli/
+├── src/
+│   ├── services/       # Core services (chat, context, security, etc.)
+│   ├── storage/        # Session and data storage
+│   ├── commands/       # Command handlers
+│   ├── providers/      # LLM provider integrations
+│   └── ui/             # Terminal UI rendering
+├── agents/             # Agent persona definitions
+└── dist/               # Compiled output
+```
 
 ## Contributing
 
@@ -55,4 +79,4 @@ Contributions welcome! Fork the repo, create a branch, and submit a PR.
 
 ## License
 
-MIT License (add details if needed).
+MIT License

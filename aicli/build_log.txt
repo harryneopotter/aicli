@@ -1,0 +1,7 @@
+
+> warp-cli@1.0.0 build
+> tsc
+
+src/services/security.service.ts(3,1): error TS6133: 'uuidv4' is declared but its value is never read.
+src/storage/session-storage.ts(258,9): error TS2739: Type '{}' is missing the following properties from type 'SessionContext': workingDirectory, recentCommands, environment
+src/storage/session-storage.ts(308,9): error TS2739: Type '{}' is missing the following properties from type 'SessionContext': workingDirectory, recentCommands, environment

@@ -1131,7 +1131,7 @@ export const commandSchema = z.string()
   .min(1, 'Command cannot be empty')
   .max(2048, 'Command too long')
   .refine(
-    (cmd) => !/[;&|`$#\n\r\0]/.test(cmd),
+    (cmd) => !/[;&|`$()<>#\n\r\0]/.test(cmd),
     'Command contains dangerous characters'
   );
 

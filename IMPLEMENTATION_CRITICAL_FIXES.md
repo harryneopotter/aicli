@@ -72,7 +72,7 @@ import * as path from 'path';
  */
 export class CommandValidator {
   // Dangerous characters that could enable command injection
-  private static readonly DANGEROUS_CHARS = /[;&|`$()<>\n\r]/;
+  private static readonly DANGEROUS_CHARS = /[;&|`$()<>\n\r\0]/;
 
   // Maximum argument length to prevent buffer overflow
   private static readonly MAX_ARG_LENGTH = 2048;

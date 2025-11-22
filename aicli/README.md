@@ -78,6 +78,24 @@ This creates a `.aicli` directory with:
 **View Documentation:**
 ```bash
 /docs view design      # View design documentation
+
+## Model Context Protocol (MCP)
+
+AiCli can connect to GLM‑4’s exclusive MCP servers to enable advanced capabilities:
+
+- **Vision** – image analysis via a local stdio child process (`npx @z_ai/mcp-server`).
+- **Web Search** – remote HTTP service (`https://api.z.ai/api/mcp/web_search_prime/mcp`).
+- **Web Reader** – remote HTTP service (`https://api.z.ai/api/mcp/web_reader/mcp`).
+
+When you select the **GLM‑4** provider, the CLI automatically connects to these MCP servers and registers the corresponding tools (`vision`, `web_search`, `web_reader`). You can also manage them manually:
+
+```bash
+/mcp connect      # start all GLM MCP servers
+/mcp disconnect   # stop them
+```
+
+The tools are available like any other AiCli tool and can be invoked via the normal tool‑calling flow. Tests (`test_mcp.ts`) verify connection, tool listing, and execution.
+
 /docs view changelog   # View full changelog
 /docs view changes     # View recent changes
 /docs view agent       # View agent rules

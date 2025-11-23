@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import matter from "gray-matter";
+import { logger } from "./logger.service";
 
 export interface Agent {
   name: string;
@@ -47,8 +48,8 @@ class AgentService {
             };
             this.agents.set(agent.name.toLowerCase(), agent);
           }
-        } catch (error) {
-          console.error(`Failed to load agent from ${file}:`, error);
+        } catch (error: any) {
+          logger.error('Failed to load agent', { file, error: error.message });
         }
       }
     }

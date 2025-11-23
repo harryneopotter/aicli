@@ -75,13 +75,18 @@ describe('ContextService Integration with DocsService', () => {
                     commands: [],
                     outputs: [],
                 },
+                project: {
+                    type: 'Node.js',
+                    name: 'test-project',
+                    version: '1.0.0',
+                },
                 docs: {
                     rules: '# Agent Rules\n\n1. Always log changes',
                     recentChanges: '- [2024-01-01] Feature X',
                 },
             };
 
-            const prompt = contextService.buildSystemPrompt(mockContext);
+            const prompt = contextService.buildSystemPrompt(mockContext as any);
 
             expect(prompt).toContain('Project Rules:');
             expect(prompt).toContain('Always log changes');
@@ -103,7 +108,7 @@ describe('ContextService Integration with DocsService', () => {
                 },
             };
 
-            const prompt = contextService.buildSystemPrompt(mockContext);
+            const prompt = contextService.buildSystemPrompt(mockContext as any);
 
             expect(prompt).not.toContain('Project Rules:');
             expect(prompt).not.toContain('Recent Changes:');
@@ -121,12 +126,17 @@ describe('ContextService Integration with DocsService', () => {
                     commands: [],
                     outputs: [],
                 },
+                project: {
+                    type: 'Node.js',
+                    name: 'test-project',
+                    version: '1.0.0',
+                },
                 docs: {
                     rules: '# Agent Rules\n\n1. Always log changes',
                 },
             };
 
-            const prompt = contextService.buildSystemPrompt(mockContext);
+            const prompt = contextService.buildSystemPrompt(mockContext as any);
 
             expect(prompt).toContain('Project Rules:');
             expect(prompt).not.toContain('Recent Changes:');

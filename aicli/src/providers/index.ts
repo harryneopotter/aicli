@@ -32,7 +32,7 @@ export class ProviderFactory {
 
   async checkProvider(providerName: string, config: LLMConfig): Promise<boolean> {
     const provider = this.providers.get(providerName);
-    if (!provider) return false;
+    if (!provider) {return false;}
 
     try {
       await provider.initialize(config);

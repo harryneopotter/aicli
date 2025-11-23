@@ -1,6 +1,7 @@
 import { configService } from './config.service';
 import inquirer from 'inquirer';
 import { uiRenderer } from '../ui/renderer';
+import { uiEvents } from '../events/ui-events';
 
 export class OnboardingService {
     private readonly ONBOARDING_KEY = 'onboardingCompleted';
@@ -33,11 +34,7 @@ export class OnboardingService {
 
     async runQuickOnboarding(): Promise<void> {
         uiRenderer.clear();
-        uiRenderer.renderBox(
-            'Warp CLI - Quick Setup',
-            'Let\'s get you started! This will only take a minute.',
-            { color: 'cyan' }
-        );
+        uiEvents.emitInfo('\n═══ Warp CLI - Quick Setup ═══\nLet\'s get you started! This will only take a minute.\n');
 
         const answers = await inquirer.prompt([
             {
@@ -114,7 +111,7 @@ export class OnboardingService {
         });
 
         this.markOnboardingComplete();
-        uiRenderer.renderSuccess('Setup complete! Starting Warp CLI...\n');
+        uiEvents.emitSuccess('Setup complete! Starting Warp CLI...\n');
     }
 }
 

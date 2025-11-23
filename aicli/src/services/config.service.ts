@@ -68,7 +68,7 @@ export class ConfigService {
 
   async getProviderConfig(provider: "ollama" | "openai" | "anthropic" | "gemini" | "glm") {
     const config = this.config.get("providers")[provider] as any;
-    if (!config) return undefined;
+    if (!config) {return undefined;}
 
     // Local providers like Ollama don't use API keys usually, but if they did, we'd handle it.
     // Cloud providers: OpenAI, Anthropic, Gemini, GLM
@@ -127,7 +127,7 @@ export class ConfigService {
     provider: "ollama" | "openai" | "anthropic" | "gemini" | "glm",
   ): Promise<boolean> {
     const providerConfig = await this.getProviderConfig(provider);
-    if (!providerConfig) return false;
+    if (!providerConfig) {return false;}
 
     if (provider === "ollama") {
       return !!(providerConfig as any).endpoint;

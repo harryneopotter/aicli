@@ -4,6 +4,8 @@ import * as path from "path";
 import * as os from "os";
 import type { ContextData } from "../types";
 import { docsService } from "./docs.service";
+import { CommandValidator } from "../utils/command-validator";
+import { logger } from "./logger.service";
 
 type CommandResult = { output: string; error?: string };
 
@@ -88,7 +90,7 @@ export class ContextService {
   ];
 
   private logCommandExecution(command: string): void {
-    console.log(`[Command Execution] ${command}`);
+    logger.info('Command execution', { command });
   }
 
   async executeCommand(command: string): Promise<CommandResult> {
@@ -97,11 +99,13 @@ export class ContextService {
 
     const trimmed = command.trim();
     const tokens = this.tokenizeCommand(trimmed);
+
     if (tokens.length === 0) {
       return { output: "", error: "No command provided" };
     }
 
     const cmd = tokens[0].toLowerCase();
+    const args = tokens.slice(1);
 
     // Feature: Safe Delete
     if (cmd === "rm" || cmd === "del") {
@@ -115,16 +119,16 @@ export class ContextService {
       return { output: '', error: errorMsg };
     }
 
-    // Security: Path Validation
-    try {
-      this.validateCommandPaths(tokens.slice(1));
-    } catch (error: any) {
-      const errorMsg = error?.message || "Command blocked for security reasons.";
+    // **NEW: Argument Validation**
+    const validation = CommandValidator.validateArguments(cmd, args);
+    if (!validation.valid) {
+      const errorMsg = `Command blocked: ${validation.errors.join('; ')}`;
       this.addOutput(errorMsg);
-      return { output: "", error: errorMsg };
+      return { output: '', error: errorMsg };
     }
 
-    return this.runShellCommand(trimmed);
+    // Use validated arguments
+    return this.runShellCommand(cmd, validation.sanitizedArgs);
   }
 
   async writeFile(filePath: string, content: string): Promise<void> {
@@ -360,22 +364,23 @@ export class ContextService {
     return `- ${relativeSource} -> ${destinationLabel} (${action})`;
   }
 
-  private async runShellCommand(command: string): Promise<CommandResult> {
-    const [cmd, ...args] = command.trim().split(/\s+/);
-
+  private async runShellCommand(cmd: string, args: string[]): Promise<CommandResult> {
     try {
-      const { stdout, stderr } = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-        // @ts-ignore - execFile is imported from child_process
-        import('child_process').then(({ execFile }) => {
-          execFile(cmd, args, {
-            cwd: process.cwd(),
-            maxBuffer: 10 * 1024 * 1024,
-            timeout: 10000
-          }, (error, stdout, stderr) => {
-            if (error) reject(error);
-            else resolve({ stdout, stderr });
-          });
-        });
+      const { execFile } = await import('child_process');
+      const { promisify } = await import('util');
+      const execFileAsync = promisify(execFile);
+
+      const { stdout, stderr } = await execFileAsync(cmd, args, {
+        cwd: process.cwd(),
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 30000, // Increased to 30s
+        shell: false, // CRITICAL: Never use shell mode
+        env: {
+          ...process.env,
+          // Remove dangerous env vars
+          LD_PRELOAD: undefined,
+          LD_LIBRARY_PATH: undefined,
+        }
       });
 
       const output = stdout + (stderr || "");
@@ -392,18 +397,6 @@ export class ContextService {
         output: error.stdout || "",
         error: errorMsg,
       };
-    }
-  }
-
-  private validateCommandPaths(args: string[]): void {
-    for (const arg of args) {
-      if (!arg || arg.startsWith("-")) {
-        continue;
-      }
-
-      if (arg.includes("/") || arg.includes("\\") || arg.includes("..")) {
-        this.ensurePathInsideProject(arg);
-      }
     }
   }
 
@@ -502,7 +495,7 @@ export class ContextService {
   private async getGitInfo() {
     try {
       const isRepo = await this.git.checkIsRepo();
-      if (!isRepo) return undefined;
+      if (!isRepo) {return undefined;}
 
       const status = await this.git.status();
       const remotes = await this.git.getRemotes(true);
@@ -520,16 +513,16 @@ export class ContextService {
   }
 
   private formatGitStatus(status: any): string {
-    if (!status.files.length) return "clean";
+    if (!status.files.length) {return "clean";}
 
     const segments: string[] = [];
-    if (status.staged.length) segments.push(`${status.staged.length} staged`);
+    if (status.staged.length) {segments.push(`${status.staged.length} staged`);}
     if (status.modified.length)
-      segments.push(`${status.modified.length} modified`);
+      {segments.push(`${status.modified.length} modified`);}
     if (status.created.length)
-      segments.push(`${status.created.length} created`);
+      {segments.push(`${status.created.length} created`);}
     if (status.deleted.length)
-      segments.push(`${status.deleted.length} deleted`);
+      {segments.push(`${status.deleted.length} deleted`);}
 
     return segments.join(", ");
   }
@@ -547,7 +540,7 @@ export class ContextService {
 
     for (const candidate of candidates) {
       const filePath = path.join(cwd, candidate.file);
-      if (!(await this.fileExists(filePath))) continue;
+      if (!(await this.fileExists(filePath))) {continue;}
 
       const info = candidate.parser
         ? await candidate.parser.call(this, filePath)

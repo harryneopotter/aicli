@@ -8,15 +8,28 @@ import { sessionService } from "./services/session.service";
 import { chatService } from "./services/chat.service";
 import { commandHandler } from "./commands/handlers";
 import { onboardingService } from "./services/onboarding.service";
+import { uiEvents } from "./events/ui-events";
 import * as dotenv from "dotenv";
 import * as path from "path";
 import * as os from "os";
 
-import { JsonValue, ProviderConfig, ProviderName } from "./types";
+import { JsonValue, ProviderConfig, ProviderName, Message } from "./types";
 
 // Load environment variables
 dotenv.config();
 dotenv.config({ path: path.join(os.homedir(), ".aicli", ".env") });
+
+// Subscribe to UI events and delegate to uiRenderer
+uiEvents.on('message', (message: Message) => uiRenderer.renderMessage(message));
+uiEvents.on('loading', (message: string) => uiRenderer.renderLoading(message));
+uiEvents.on('warning', (message: string) => uiRenderer.renderWarning(message));
+uiEvents.on('info', (message: string) => uiRenderer.renderInfo(message));
+uiEvents.on('error', (message: string) => uiRenderer.renderError(message));
+uiEvents.on('success', (message: string) => uiRenderer.renderSuccess(message));
+uiEvents.on('streamingStart', () => uiRenderer.startStreamingResponse());
+uiEvents.on('streamingChunk', (chunk: string) => uiRenderer.renderStreamingChunk(chunk));
+uiEvents.on('streamingEnd', () => uiRenderer.endStreamingResponse());
+uiEvents.on('codeBlock', (code: string, language: string) => uiRenderer.renderCodeBlock(code, language));
 
 const program = new Command();
 

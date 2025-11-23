@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as os from 'os';
+import { logger } from './logger.service';
 
 export interface VectorDocument {
     id: string;
@@ -46,7 +47,7 @@ export class VectorService {
     }
 
     async search(queryVector: number[], k: number = 5): Promise<VectorDocument[]> {
-        if (this.store.length === 0) return [];
+        if (this.store.length === 0) {return [];}
 
         const scored = this.store.map(doc => ({
             doc,
@@ -80,8 +81,8 @@ export class VectorService {
             try {
                 const data = await fs.promises.readFile(this.indexPath, 'utf8');
                 this.store = JSON.parse(data);
-            } catch (e) {
-                console.error("Failed to load vector index:", e);
+            } catch (e: any) {
+                logger.error('Failed to load vector index', { error: e.message });
                 this.store = [];
             }
         } else {

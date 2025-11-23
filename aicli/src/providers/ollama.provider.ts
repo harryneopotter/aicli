@@ -61,7 +61,7 @@ export class OllamaProvider extends BaseLLMProvider {
       }
 
       const reader = response.body;
-      if (!reader) throw new Error('No response body');
+      if (!reader) {throw new Error('No response body');}
 
       let buffer = '';
       for await (const chunk of reader as any) {

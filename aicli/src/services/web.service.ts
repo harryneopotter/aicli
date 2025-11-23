@@ -1,5 +1,6 @@
 import google from 'google-it';
 import fetch from 'node-fetch';
+import { logger } from './logger.service';
 
 export interface SearchResult {
   title: string;
@@ -13,7 +14,7 @@ class WebService {
       const results = await google({ query });
       return results.slice(0, 10); // Return top 10 results
     } catch (error: any) {
-      console.error('Web search failed:', error);
+      logger.error('Web search failed', { query, error: error.message });
       throw new Error(`Web search failed: ${error.message}`);
     }
   }
@@ -28,7 +29,7 @@ class WebService {
       // A more advanced implementation could parse the HTML.
       return await response.text();
     } catch (error: any) {
-      console.error(`Web fetch failed for URL ${url}:`, error);
+      logger.error('Web fetch failed', { url, error: error.message });
       throw new Error(`Failed to fetch content from ${url}: ${error.message}`);
     }
   }

@@ -1,5 +1,5 @@
 import { chatService } from './chat.service';
-import { uiRenderer } from '../ui/renderer';
+import { uiEvents } from '../events/ui-events';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -39,7 +39,7 @@ export class TrainingService {
 
   async train(samples: TrainingSample[], playbookName: string = 'default'): Promise<Playbook> {
     await this.initialize();
-    uiRenderer.renderLoading('Training agent...');
+    uiEvents.emitLoading('Training agent...');
 
     const playbook = await this.loadPlaybook(playbookName) || this.createEmptyPlaybook(playbookName);
 
@@ -50,8 +50,7 @@ export class TrainingService {
     playbook.updated = new Date();
     await this.savePlaybook(playbook);
 
-    uiRenderer.stopLoading();
-    uiRenderer.renderSuccess(`Trained! Playbook '${playbookName}' now has ${playbook.bullets.length} strategies.`);
+    uiEvents.emitSuccess(`Trained! Playbook '${playbookName}' now has ${playbook.bullets.length} strategies.`);
 
     return playbook;
   }
@@ -160,7 +159,7 @@ tools: ["/exec", "/analyze"]
     const filePath = path.join(agentsDir, `${name}-persona.md`);
     await fs.writeFile(filePath, mdContent, 'utf8');
 
-    uiRenderer.renderSuccess(`Exported to agents/${name}-persona.md (${playbook.bullets.length} strategies)`);
+    uiEvents.emitSuccess(`Exported to agents/${name}-persona.md (${playbook.bullets.length} strategies)`);
   }
 
 }

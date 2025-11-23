@@ -7,7 +7,7 @@ export class Tokenizer {
      * For production, consider 'tiktoken' or similar, but this avoids native deps.
      */
     static estimateTokens(text: string): number {
-        if (!text) return 0;
+        if (!text) {return 0;}
         return Math.ceil(text.length / 4);
     }
 
@@ -31,7 +31,7 @@ export class Tokenizer {
      */
     static optimizeContext(messages: Message[], maxTokens: number, minRecent: number = 2): Message[] {
         const totalTokens = this.countMessagesTokens(messages);
-        if (totalTokens <= maxTokens) return messages;
+        if (totalTokens <= maxTokens) {return messages;}
 
         const optimized: Message[] = [];
         let currentTokens = 0;

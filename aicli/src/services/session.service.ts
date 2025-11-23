@@ -3,6 +3,7 @@ import { Session, Message, SessionContext } from "../types";
 import { SessionStorage } from "../storage/session-storage";
 import { contextService } from "./context.service";
 import { configService } from "./config.service";
+import { logger } from "./logger.service";
 
 export class SessionService {
   private currentSession?: Session;
@@ -116,7 +117,7 @@ export class SessionService {
   }
 
   async updateContext(): Promise<void> {
-    if (!this.currentSession) return;
+    if (!this.currentSession) {return;}
 
     const context = await contextService.getContext();
     this.currentSession.context = this.convertContextToSessionContext(context);
@@ -127,7 +128,7 @@ export class SessionService {
     const SAFE_ENV_VARS = ['PATH', 'HOME', 'SHELL', 'USER', 'LOGNAME', 'LANG', 'PWD', 'TERM'];
     const safeEnv: Record<string, string> = {};
     for (const key of SAFE_ENV_VARS) {
-      if (process.env[key]) safeEnv[key] = process.env[key] as string;
+      if (process.env[key]) {safeEnv[key] = process.env[key] as string;}
     }
 
     return {
@@ -146,8 +147,8 @@ export class SessionService {
       if (this.currentSession && this.currentSession.messages.length > 0) {
         try {
           await this.saveCurrentSession();
-        } catch (error) {
-          console.error("Autosave failed:", error);
+        } catch (error: any) {
+          logger.error('Autosave failed', { error: error.message });
         }
       }
     }, 30000);

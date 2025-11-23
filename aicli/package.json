@@ -23,10 +23,10 @@
     "start": "node dist/cli.js",
     "watch": "tsc --watch",
     "test": "jest",
-    "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix",
-    "install-global": "npm run build && npm link",
-    "clean": "rmdir /s dist 2>nul || rm -rf dist"
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:report": "eslint . --output-file eslint-report.json --format json",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
@@ -52,7 +52,9 @@
     "simple-git": "^3.28.0",
     "strip-ansi": "^6.0.1",
     "ts-morph": "^27.0.2",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "winston": "^3.18.3",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.9",

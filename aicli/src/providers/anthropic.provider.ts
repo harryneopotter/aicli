@@ -82,7 +82,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      if (!this.client) return false;
+      if (!this.client) {return false;}
       // Simple health check - try to get account info
       await this.client.messages.create({
         model: 'claude-3-5-sonnet-20241022',

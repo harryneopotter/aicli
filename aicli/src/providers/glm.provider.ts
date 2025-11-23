@@ -64,7 +64,7 @@ export class GlmProvider extends BaseLLMProvider {
 
     async isAvailable(): Promise<boolean> {
         try {
-            if (!this.config?.apiKey) return false;
+            if (!this.config?.apiKey) {return false;}
 
             // Test with a simple request
             const endpoint = this.config.endpoint || "https://api.z.ai/api/paas/v4";

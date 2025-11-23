@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { uiRenderer } from '../ui/renderer';
+import { uiEvents } from '../events/ui-events';
 
 export class DocsService {
     private docsDir: string;
@@ -35,10 +35,10 @@ export class DocsService {
             const filePath = path.join(this.docsDir, file.name);
             try {
                 await fs.access(filePath);
-                uiRenderer.renderInfo(`File exists: ${file.name}`);
+                uiEvents.emitInfo(`File exists: ${file.name}`);
             } catch {
                 await fs.writeFile(filePath, file.content, 'utf8');
-                uiRenderer.renderSuccess(`Created: ${file.name}`);
+                uiEvents.emitSuccess(`Created: ${file.name}`);
             }
         }
     }
@@ -62,7 +62,7 @@ export class DocsService {
 
     async getRecentChanges(lines: number = 20): Promise<string> {
         const content = await this.readFile('changes.md');
-        if (!content) return '';
+        if (!content) {return '';}
         const allLines = content.split('\n');
         return allLines.slice(-lines).join('\n');
     }

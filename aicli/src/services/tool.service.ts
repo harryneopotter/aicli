@@ -1,6 +1,7 @@
 import { contextService } from "./context.service";
 import { mcpService } from "./mcp.service";
 import { docsService } from "./docs.service";
+import { logger } from "./logger.service";
 
 export interface Tool {
     name: string;
@@ -24,7 +25,7 @@ export class ToolService {
                 usage: '{"name": "exec", "arguments": {"command": "ls -la"}}',
                 execute: async (args: any) => {
                     const command = typeof args === 'string' ? args : args.command;
-                    if (!command) return "Error: Missing 'command' argument";
+                    if (!command) {return "Error: Missing 'command' argument";}
 
                     const result = await contextService.executeCommand(command);
                     if (result.error) {
@@ -39,7 +40,7 @@ export class ToolService {
                 usage: '{"name": "read_file", "arguments": {"path": "path/to/file"}}',
                 execute: async (args: any) => {
                     const filePath = typeof args === 'string' ? args : args.path;
-                    if (!filePath) return "Error: Missing 'path' argument";
+                    if (!filePath) {return "Error: Missing 'path' argument";}
 
                     try {
                         return await contextService.readFile(filePath);
@@ -63,7 +64,7 @@ export class ToolService {
                         content = args.content;
                     }
 
-                    if (!filePath || content === undefined) return "Error: Missing 'path' or 'content' argument";
+                    if (!filePath || content === undefined) {return "Error: Missing 'path' or 'content' argument";}
 
                     try {
                         await contextService.writeFile(filePath, content);
@@ -93,13 +94,13 @@ export class ToolService {
                 usage: '{"name": "search_code", "arguments": {"query": "how is authentication handled?"}}',
                 execute: async (args: any) => {
                     const query = typeof args === 'string' ? args : args.query;
-                    if (!query) return "Error: Missing 'query' argument";
+                    if (!query) {return "Error: Missing 'query' argument";}
 
                     try {
                         // Dynamic import to avoid circular dependency if any, or just import at top
                         const { ragService } = require('./rag.service');
                         const results = await ragService.search(query);
-                        if (results.length === 0) return "No relevant code found. Try running /index first.";
+                        if (results.length === 0) {return "No relevant code found. Try running /index first.";}
 
                         return results.map((r: any) => `File: ${r.metadata.filePath}\nContent:\n${r.content}\n---\n`).join("\n");
                     } catch (error: any) {
@@ -116,7 +117,7 @@ export class ToolService {
                     const details = args.details;
                     const files = args.files || [];
 
-                    if (!title || !details) return "Error: Missing 'title' or 'details' argument";
+                    if (!title || !details) {return "Error: Missing 'title' or 'details' argument";}
 
                     try {
                         await docsService.logActivity(title, details, files);
@@ -154,7 +155,7 @@ export class ToolService {
 
     parseToolCall(content: string): { name: string; args: any } | null {
         const match = content.match(/<tool_code>([\s\S]*?)<\/tool_code>/);
-        if (!match) return null;
+        if (!match) {return null;}
 
         try {
             const jsonStr = match[1].trim();
@@ -163,8 +164,8 @@ export class ToolService {
                 name: parsed.name,
                 args: parsed.arguments
             };
-        } catch (e) {
-            console.error("Failed to parse tool call JSON:", e);
+        } catch (e: any) {
+            logger.error('Failed to parse tool call JSON', { error: e.message });
             return null;
         }
     }
@@ -203,9 +204,9 @@ export class ToolService {
                         this.tools.push(newTool);
                     }
                 }
-                console.log(`Registered ${tools.length} tools from MCP server: ${serverName}`);
-            } catch (e) {
-                console.error(`Failed to register tools from ${serverName}:`, e);
+                logger.info('Registered MCP tools', { server: serverName, count: tools.length });
+            } catch (e: any) {
+                logger.error('Failed to register MCP tools', { server: serverName, error: e.message });
             }
         }
     }

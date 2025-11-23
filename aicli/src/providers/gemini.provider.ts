@@ -78,7 +78,7 @@ export class GeminiProvider extends BaseLLMProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      if (!this.config?.apiKey) return false;
+      if (!this.config?.apiKey) {return false;}
 
       // Test with a simple request
       const model = this.config.model || "gemini-1.5-flash";

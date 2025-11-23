@@ -43,7 +43,7 @@ export class SessionStorage implements StorageProvider {
   }
 
   private async createTables(): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
+    if (!this.db) {throw new Error("Database not initialized");}
 
     await this.runAsync(`
       CREATE TABLE IF NOT EXISTS sessions (
@@ -86,7 +86,7 @@ export class SessionStorage implements StorageProvider {
   }
 
   async saveSession(session: Session): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
+    if (!this.db) {throw new Error("Database not initialized");}
 
     // Encrypt sensitive data
     const encryptedContext = await securityService.encrypt(JSON.stringify(session.context));
@@ -150,7 +150,7 @@ export class SessionStorage implements StorageProvider {
   }
 
   async loadSession(id: string): Promise<Session | null> {
-    if (!this.db) throw new Error("Database not initialized");
+    if (!this.db) {throw new Error("Database not initialized");}
 
     // Load session
     const sessionRow: any = await this.getAsync(
@@ -158,7 +158,7 @@ export class SessionStorage implements StorageProvider {
       [id],
     );
 
-    if (!sessionRow) return null;
+    if (!sessionRow) {return null;}
 
     // Decrypt session data
     let context, metadata;
@@ -223,7 +223,7 @@ export class SessionStorage implements StorageProvider {
   }
 
   async listSessions(): Promise<Session[]> {
-    if (!this.db) throw new Error("Database not initialized");
+    if (!this.db) {throw new Error("Database not initialized");}
 
     const rows: any[] = await this.allAsync(
       `SELECT id, name, created, updated, context, metadata
@@ -264,7 +264,7 @@ export class SessionStorage implements StorageProvider {
   }
 
   async deleteSession(id: string): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
+    if (!this.db) {throw new Error("Database not initialized");}
 
     await this.runAsync(`DELETE FROM messages WHERE session_id = ?`, [id]);
     await this.runAsync(`DELETE FROM sessions WHERE id = ?`, [id]);
@@ -279,7 +279,7 @@ export class SessionStorage implements StorageProvider {
   async searchSessions(query: string): Promise<Session[]> {
     // Search is effectively disabled for encrypted content unless we implement secure search index
     // For now, it will return empty or only match unencrypted legacy data
-    if (!this.db) throw new Error("Database not initialized");
+    if (!this.db) {throw new Error("Database not initialized");}
 
     const rows: any[] = await this.allAsync(
       `SELECT s.id, s.name, s.created, s.updated, s.context, s.metadata

@@ -3,7 +3,8 @@ import { providerFactory } from "../providers";
 import { sessionService } from "./session.service";
 import { contextService } from "./context.service";
 import { configService } from "./config.service";
-import { uiRenderer } from "../ui/renderer";
+import { uiEvents } from "../events/ui-events";
+import { logger } from "./logger.service";
 import { agentService } from "./agent.service";
 import { toolService } from "./tool.service";
 import { mcpService } from "./mcp.service";
@@ -19,7 +20,7 @@ export class ChatService {
   async switchProvider(
     providerName: "ollama" | "openai" | "anthropic" | "gemini" | "glm",
   ): Promise<void> {
-    const providerConfig = configService.getProviderConfig(providerName);
+    let providerConfig = configService.getProviderConfig(providerName);
 
     if (!providerConfig) {
       const defaultConfig: any = {
@@ -40,6 +41,9 @@ export class ChatService {
         providerName,
         defaultConfig[providerName],
       );
+      
+      // Re-fetch after setting default
+      providerConfig = configService.getProviderConfig(providerName) || defaultConfig[providerName];
     }
 
     const config: LLMConfig = {
@@ -72,10 +76,12 @@ export class ChatService {
         if (glmConfig?.apiKey) {
           await mcpService.connectGLMMCPServers(glmConfig.apiKey);
           await toolService.registerMCPTools(['zai-vision', 'zai-web-search', 'zai-web-reader']);
-          uiRenderer.renderSuccess('\u2713 Connected to GLM MCP servers (Vision, Web Search, Web Reader)');
+          uiEvents.emitSuccess('\u2713 Connected to GLM MCP servers (Vision, Web Search, Web Reader)');
+          logger.info('Connected to GLM MCP servers', { provider: 'glm' });
         }
       } catch (error) {
-        uiRenderer.renderWarning(`Failed to connect GLM MCP servers: ${(error as Error).message}`);
+        uiEvents.emitWarning(`Failed to connect GLM MCP servers: ${(error as Error).message}`);
+        logger.warn('Failed to connect GLM MCP servers', { error: (error as Error).message });
       }
     } else {
       // Disconnect GLM servers when switching away
@@ -107,13 +113,15 @@ export class ChatService {
       try {
         await this.switchProvider(provider as "ollama" | "openai" | "anthropic" | "gemini" | "glm");
         if (provider !== providerName) {
-          uiRenderer.renderInfo(`Fallback to ${provider} provider`);
+          uiEvents.emitInfo(`Fallback to ${provider} provider`);
+          logger.info('Provider fallback', { from: providerName, to: provider });
         }
         return;
       } catch (error) {
-        uiRenderer.renderWarning(
+        uiEvents.emitWarning(
           `Provider ${provider} failed: ${(error as Error).message}`,
         );
+        logger.warn('Provider failed during fallback', { provider, error: (error as Error).message });
         continue;
       }
     }
@@ -135,7 +143,8 @@ export class ChatService {
     }
 
     const userMsg = sessionService.addMessage("user", userMessage);
-    uiRenderer.renderMessage(userMsg);
+    uiEvents.emitMessage(userMsg);
+    logger.debug('User message added', { messageId: userMsg.id });
 
     const context = await contextService.getContext();
     const agent = agentService.getCurrentAgent();
@@ -170,20 +179,23 @@ export class ChatService {
         steps++;
 
         if (options?.streaming && this.currentProvider.streamChat) {
-          uiRenderer.startStreamingResponse();
+          uiEvents.emitStreamingStart();
+          logger.debug('Starting streaming response', { step: steps });
           const chunks: string[] = [];
 
           for await (const chunk of this.currentProvider.streamChat(optimizedMessages)) {
             chunks.push(chunk);
-            uiRenderer.renderStreamingChunk(chunk);
+            uiEvents.emitStreamingChunk(chunk);
           }
 
-          uiRenderer.endStreamingResponse();
+          uiEvents.emitStreamingEnd();
+          logger.debug('Streaming response completed', { step: steps });
           response = chunks.join("");
         } else {
-          uiRenderer.renderLoading(steps === 1 ? "Thinking..." : "Analyzing tool output...");
+          uiEvents.emitLoading(steps === 1 ? "Thinking..." : "Analyzing tool output...");
+          logger.debug('Processing chat request', { step: steps });
           response = await this.currentProvider.chat(optimizedMessages);
-          uiRenderer.stopLoading();
+          uiEvents.emitStopLoading();
         }
 
         // Check for tool call
@@ -211,7 +223,8 @@ export class ChatService {
           messages.push({ role: "assistant", content: response, id: "temp_assistant", timestamp: new Date() });
 
           if (tool) {
-            uiRenderer.renderInfo(`Agent calling tool: ${toolName}`);
+            uiEvents.emitInfo(`Agent calling tool: ${toolName}`);
+            logger.info('Agent calling tool', { toolName, args: toolArgs });
             const output = await tool.execute(toolArgs);
 
             // Add system output to history
@@ -237,31 +250,35 @@ export class ChatService {
         });
 
         if (!options?.streaming) {
-          uiRenderer.renderMessage(assistantMsg);
+          uiEvents.emitMessage(assistantMsg);
         }
+        logger.debug('Response completed', { steps });
 
         return response;
       }
 
       return response; // Max steps reached
     } catch (error: any) {
-      uiRenderer.stopLoading();
+      uiEvents.emitStopLoading();
+      logger.error('Chat error', error);
       throw new Error(`Chat error: ${(error as Error).message}`);
     }
   }
 
   async executeCommand(command: string): Promise<void> {
-    uiRenderer.renderLoading(`Executing: ${command}`);
+    uiEvents.emitLoading(`Executing: ${command}`);
+    logger.info('Executing command', { command });
 
     try {
       const result = await contextService.executeCommand(command);
-      uiRenderer.stopLoading();
+      uiEvents.emitStopLoading();
 
       if (result.error) {
-        uiRenderer.renderWarning("Command completed with warnings");
+        uiEvents.emitWarning("Command completed with warnings");
+        logger.warn('Command completed with warnings', { command, error: result.error });
       }
 
-      uiRenderer.renderCodeBlock(result.output, "shell");
+      uiEvents.emitCodeBlock(result.output, "shell");
 
       sessionService.addMessage(
         "system",
@@ -274,10 +291,11 @@ export class ChatService {
         },
       );
     } catch (error: any) {
-      uiRenderer.stopLoading();
-      uiRenderer.renderError(
+      uiEvents.emitStopLoading();
+      uiEvents.emitError(
         `Command execution failed: ${(error as Error).message}`,
       );
+      logger.error('Command execution failed', { command, error: (error as Error).message });
     }
   }
 

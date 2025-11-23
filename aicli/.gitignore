@@ -50,3 +50,5 @@ coverage/
 *.tgz
 .npm
 .eslintcache
+.not-needed/
+eslint-report.json

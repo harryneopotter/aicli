@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
 import fetch from 'node-fetch';
+import { logger } from './logger.service';
 
 export interface MCPTool {
     name: string;
@@ -14,7 +15,7 @@ export class MCPService {
     private pendingRequests: Map<number, { resolve: Function, reject: Function }> = new Map();
 
     async connect(name: string, command: string, args: string[] = [], env?: Record<string, string>) {
-        console.log(`Connecting to MCP server: ${name} (${command} ${args.join(' ')})`);
+        logger.info('Connecting to MCP server', { name, command, args });
         const cp = spawn(command, args, {
             stdio: ['pipe', 'pipe', 'inherit'],
             env: env ? { ...process.env, ...env } : process.env
@@ -24,7 +25,7 @@ export class MCPService {
         cp.stdout?.on('data', (data) => {
             const lines = data.toString().split('\n');
             for (const line of lines) {
-                if (!line.trim()) continue;
+                if (!line.trim()) {continue;}
                 try {
                     const msg = JSON.parse(line);
                     this.handleMessage(msg);
@@ -35,7 +36,7 @@ export class MCPService {
         });
 
         cp.on('error', (err) => {
-            console.error(`MCP Server ${name} error:`, err);
+            logger.error('MCP Server error', { name, error: err.message });
         });
 
         // Initialize handshake
@@ -47,7 +48,7 @@ export class MCPService {
             });
             await this.notify(name, "notifications/initialized");
         } catch (e) {
-            console.error(`Failed to initialize MCP server ${name}:`, e);
+            logger.error('Failed to initialize MCP server', { name, error: (e as Error).message });
         }
     }
 
@@ -55,14 +56,14 @@ export class MCPService {
         if (msg.id !== undefined && this.pendingRequests.has(msg.id)) {
             const { resolve, reject } = this.pendingRequests.get(msg.id)!;
             this.pendingRequests.delete(msg.id);
-            if (msg.error) reject(msg.error);
-            else resolve(msg.result);
+            if (msg.error) {reject(msg.error);}
+            else {resolve(msg.result);}
         }
     }
 
     private async request(serverName: string, method: string, params?: any) {
         const cp = this.servers.get(serverName);
-        if (!cp) throw new Error(`Server ${serverName} not connected`);
+        if (!cp) {throw new Error(`Server ${serverName} not connected`);}
 
         const id = this.requestCounter++;
         const msg = { jsonrpc: "2.0", id, method, params };
@@ -75,7 +76,7 @@ export class MCPService {
 
     private async notify(serverName: string, method: string, params?: any) {
         const cp = this.servers.get(serverName);
-        if (!cp) return;
+        if (!cp) {return;}
 
         const msg = { jsonrpc: "2.0", method, params };
         cp.stdin?.write(JSON.stringify(msg) + "\n");
@@ -113,7 +114,7 @@ export class MCPService {
 
     // HTTP Transport Methods
     async connectHTTP(name: string, url: string, apiKey: string) {
-        console.log(`Connecting to HTTP MCP server: ${name} (${url})`);
+        logger.info('Connecting to HTTP MCP server', { name, url });
         this.httpServers.set(name, { url, apiKey });
 
         // Initialize handshake via HTTP
@@ -124,7 +125,7 @@ export class MCPService {
                 clientInfo: { name: "aicli", version: "1.0.0" }
             });
         } catch (e) {
-            console.error(`Failed to initialize HTTP MCP server ${name}:`, e);
+            logger.error('Failed to initialize HTTP MCP server', { name, error: (e as Error).message });
             this.httpServers.delete(name);
             throw e;
         }
@@ -132,7 +133,7 @@ export class MCPService {
 
     private async requestHTTP(serverName: string, method: string, params?: any): Promise<any> {
         const server = this.httpServers.get(serverName);
-        if (!server) throw new Error(`HTTP server ${serverName} not connected`);
+        if (!server) {throw new Error(`HTTP server ${serverName} not connected`);}
 
         const id = this.requestCounter++;
         const response = await fetch(server.url, {
@@ -163,7 +164,7 @@ export class MCPService {
 
     // GLM-Specific Methods
     async connectGLMMCPServers(apiKey: string) {
-        console.log('Connecting to GLM MCP servers...');
+        logger.info('Connecting to GLM MCP servers');
 
         try {
             // 1. Connect Vision MCP (stdio with npx)
@@ -173,9 +174,9 @@ export class MCPService {
                 ['-y', '@z_ai/mcp-server'],
                 { Z_AI_API_KEY: apiKey, Z_AI_MODE: 'ZAI' }
             );
-            console.log('✓ Vision MCP connected');
+            logger.info('Vision MCP connected');
         } catch (e) {
-            console.warn('Failed to connect Vision MCP:', e);
+            logger.warn('Failed to connect Vision MCP', { error: (e as Error).message });
         }
 
         try {
@@ -185,9 +186,9 @@ export class MCPService {
                 'https://api.z.ai/api/mcp/web_search_prime/mcp',
                 apiKey
             );
-            console.log('✓ Web Search MCP connected');
+            logger.info('Web Search MCP connected');
         } catch (e) {
-            console.warn('Failed to connect Web Search MCP:', e);
+            logger.warn('Failed to connect Web Search MCP', { error: (e as Error).message });
         }
 
         try {
@@ -197,9 +198,9 @@ export class MCPService {
                 'https://api.z.ai/api/mcp/web_reader/mcp',
                 apiKey
             );
-            console.log('✓ Web Reader MCP connected');
+            logger.info('Web Reader MCP connected');
         } catch (e) {
-            console.warn('Failed to connect Web Reader MCP:', e);
+            logger.warn('Failed to connect Web Reader MCP', { error: (e as Error).message });
         }
     }
 
@@ -212,13 +213,13 @@ export class MCPService {
                 const cp = this.servers.get(serverName);
                 cp?.kill();
                 this.servers.delete(serverName);
-                console.log(`Disconnected stdio MCP server: ${serverName}`);
+                logger.info('Disconnected stdio MCP server', { serverName });
             }
 
             // Disconnect HTTP server
             if (this.httpServers.has(serverName)) {
                 this.httpServers.delete(serverName);
-                console.log(`Disconnected HTTP MCP server: ${serverName}`);
+                logger.info('Disconnected HTTP MCP server', { serverName });
             }
         }
     }

@@ -66,7 +66,7 @@ export class OpenAIProvider extends BaseLLMProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      if (!this.client) return false;
+      if (!this.client) {return false;}
       await this.client.models.list();
       return true;
     } catch {

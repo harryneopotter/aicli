@@ -187,15 +187,14 @@ API keys stored via keychain are NOT in this file (they're in your system's secu
 ## Project Structure
 
 ```
-aicli/
-├── src/
-│   ├── services/       # Core services (chat, context, security, etc.)
-│   ├── storage/        # Session and data storage
-│   ├── commands/       # Command handlers
-│   ├── providers/      # LLM provider integrations
-│   └── ui/             # Terminal UI rendering
-├── agents/             # Agent persona definitions
-└── dist/               # Compiled output
+src/
+├── services/       # Core services (chat, context, security, etc.)
+├── storage/        # Session and data storage
+├── commands/       # Command handlers
+├── providers/      # LLM provider integrations
+└── ui/             # Terminal UI rendering
+agents/             # Agent persona definitions
+dist/               # Compiled output
 ```
 
 ## Contributing

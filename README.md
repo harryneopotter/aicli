@@ -4,10 +4,13 @@ AiCli is an advanced, AI-powered command-line interface designed for developer p
 
 ## Key Features
 
-### 🔒 Security First
+### 🔒 Security & Reliability
 - **Keychain Integration**: API keys are securely stored in your system's keychain (using `keytar`), not in plain text config files.
 - **Session Encryption**: All session data (chat history, context) is encrypted at rest using AES-256-GCM.
 - **Safe Execution**: Shell commands via `/exec` are whitelisted and validated to prevent accidental damage.
+- **Input Sanitization**: Automatic redaction of PII (API keys, passwords, paths) from logs and outputs.
+- **Robust Validation**: All inputs are validated against strict Zod schemas to prevent injection attacks.
+- **Test Coverage**: >70% unit and integration test coverage across core services.
 
 ### 🤖 Agentic Capabilities
 - **Agent Personas**: Switch between specialized agents (e.g., "Coder", "Writer") defined in markdown files.
@@ -26,6 +29,7 @@ AiCli is an advanced, AI-powered command-line interface designed for developer p
 git clone https://github.com/harryneopotter/aicli.git
 cd aicli
 npm install
+npm test    # Run the test suite to verify installation
 npm run build
 ```
 

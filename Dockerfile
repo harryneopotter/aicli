@@ -5,14 +5,14 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY aicli/package*.json ./
+COPY package*.json ./
 
 # Install dependencies
 RUN npm ci --only=production && \
     npm cache clean --force
 
 # Copy source code
-COPY aicli/ ./
+COPY . ./
 
 # Build TypeScript
 RUN npm run build

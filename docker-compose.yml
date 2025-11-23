@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  aicli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aicli:latest
+    container_name: aicli
+
+    # Interactive terminal
+    stdin_open: true
+    tty: true
+
+    # Environment variables
+    environment:
+      # LLM Provider API Keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GLM_API_KEY=${GLM_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+
+      # Provider selection
+      - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-ollama}
+
+      # Ollama endpoint (if using local Ollama)
+      - OLLAMA_ENDPOINT=${OLLAMA_ENDPOINT:-http://ollama:11434}
+
+    # Volume mounts
+    volumes:
+      # Persist sessions and configuration
+      - aicli-data:/home/aicli/.aicli
+
+      # Mount project directory (for file operations)
+      - ${PROJECT_DIR:-./workspace}:/workspace
+
+      # Git configuration
+      - ~/.gitconfig:/home/aicli/.gitconfig:ro
+
+    # Working directory
+    working_dir: /workspace
+
+    # Network
+    networks:
+      - aicli-network
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Optional: Run local Ollama instance
+  ollama:
+    image: ollama/ollama:latest
+    container_name: aicli-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - aicli-network
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+
+volumes:
+  aicli-data:
+    driver: local
+  ollama-data:
+    driver: local
+
+networks:
+  aicli-network:
+    driver: bridge

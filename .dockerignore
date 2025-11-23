@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+npm-debug.log
+package-lock.json
+
+# Build artifacts
+dist/
+coverage/
+*.log
+
+# Development files
+.git/
+.gitignore
+.env
+.env.local
+*.md
+!README.md
+
+# Test files
+**/__tests__/
+**/*.test.ts
+jest.config.js
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+.not-needed/
+.aicli/
+logs/

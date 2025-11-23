@@ -14,3 +14,6 @@ tabby-ai-agent/
 
 # General ignores
 *.zip
+node_modules/
+dist/
+coverage/

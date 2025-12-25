@@ -7,6 +7,12 @@ describe('ContextService - Security Tests', () => {
       expect(result.error).toBeDefined();
       expect(result.error).toMatch(/blocked|not allowed/);
     });
+  
+    it('should block bash $\' syntax', async () => {
+      const result = await contextService.executeCommand("echo $'hello; cat /etc/passwd'");
+      expect(result.error).toBeDefined();
+      expect(result.error).toMatch(/blocked/);
+    });
 
     it('should block command substitution', async () => {
       const result = await contextService.executeCommand('echo $(whoami)');
@@ -22,6 +28,11 @@ describe('ContextService - Security Tests', () => {
       const result = await contextService.executeCommand('echo hello');
       expect(result.error).toBeUndefined();
       expect(result.output).toContain('hello');
+    });
+
+    it('should report errors from failing commands', async () => {
+      const result = await contextService.executeCommand('ls definitely-not-real-file');
+      expect(result.error).toBeDefined();
     });
   });
 

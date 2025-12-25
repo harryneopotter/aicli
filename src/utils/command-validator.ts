@@ -7,6 +7,19 @@ export class CommandValidator {
   // Dangerous characters that could enable command injection
   private static readonly DANGEROUS_CHARS = /[;&|`$()<>#\n\r\0]/;
 
+  // Patterns that should be rejected before tokenization occurs
+  private static readonly RAW_DANGEROUS_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+    { pattern: /\r|\n/, reason: 'Multi-line commands are not allowed' },
+    { pattern: /&&|\|\|/, reason: 'Chaining operators (&&, ||) are blocked' },
+    { pattern: /\|/, reason: 'Pipes are not supported in /exec' },
+    { pattern: /`/, reason: 'Backticks are not allowed' },
+    { pattern: /\$\(/, reason: 'Subshell syntax $(...) detected' },
+    { pattern: /\$\{/, reason: 'Environment interpolation ${...} detected' },
+    { pattern: /\$'[^']*'/, reason: 'Bash $\'...\' syntax is not allowed' },
+    { pattern: /[<>]/, reason: 'Redirection operators (<, >) are blocked' },
+    { pattern: /;;/, reason: 'Multiple command separators (;;) detected' }
+  ];
+
   // Maximum argument length to prevent buffer overflow
   private static readonly MAX_ARG_LENGTH = 2048;
 
@@ -70,6 +83,31 @@ export class CommandValidator {
       valid: errors.length === 0,
       errors,
       sanitizedArgs: errors.length === 0 ? args : [],
+    };
+  }
+
+  /**
+   * Validate the raw command string before tokenization takes place. This catches
+   * injection primitives that rely on shell semantics (pipes, subshells, etc.).
+   */
+  static validateRawCommand(command: string): RawValidationResult {
+    const errors: string[] = [];
+    const trimmed = command.trim();
+
+    if (!trimmed) {
+      errors.push('No command provided');
+      return { valid: false, errors };
+    }
+
+    for (const matcher of this.RAW_DANGEROUS_PATTERNS) {
+      if (matcher.pattern.test(trimmed)) {
+        errors.push(matcher.reason);
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
     };
   }
 
@@ -158,6 +196,11 @@ interface ValidationResult {
   valid: boolean;
   errors: string[];
   sanitizedArgs: string[];
+}
+
+interface RawValidationResult {
+  valid: boolean;
+  errors: string[];
 }
 
 interface ArgumentSchema {

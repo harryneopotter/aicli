@@ -89,6 +89,23 @@ export class ContextService {
     'ls', 'pwd', 'cat', 'echo', 'whoami', 'date', 'git', 'npm', 'yarn', 'pnpm', 'node', 'python', 'python3', 'pip', 'pip3', 'cargo', 'go', 'java', 'javac', 'npx', 'tsc', 'make', 'gcc', 'g++', 'clang', 'docker', 'grep', 'find', 'head', 'tail', 'du', 'df', 'free', 'top', 'htop', 'ps', 'kill', 'uname', 'which', 'whereis', 'tree', 'stat', 'chmod', 'chown', 'curl', 'wget', 'ifconfig', 'ip', 'ping', 'traceroute', 'ssh', 'scp', 'rsync', 'zip', 'unzip', 'tar', 'gzip', 'bzip2', 'xz'
   ];
 
+  private static SAFE_ENV_WHITELIST = [
+    'PATH',
+    'HOME',
+    'USER',
+    'USERNAME',
+    'SHELL',
+    'TERM',
+    'TMPDIR',
+    'TEMP',
+    'TMP',
+    'LANG',
+    'LC_ALL',
+    'LC_CTYPE',
+    'COLORTERM',
+    'FORCE_COLOR'
+  ];
+
   private logCommandExecution(command: string): void {
     logger.info('Command execution', { command });
   }
@@ -98,6 +115,14 @@ export class ContextService {
     this.logCommandExecution(command);
 
     const trimmed = command.trim();
+
+    const rawValidation = CommandValidator.validateRawCommand(trimmed);
+    if (!rawValidation.valid) {
+      const errorMsg = `Command blocked: ${rawValidation.errors.join('; ')}`;
+      this.addOutput(errorMsg);
+      return { output: '', error: errorMsg };
+    }
+
     const tokens = this.tokenizeCommand(trimmed);
 
     if (tokens.length === 0) {
@@ -119,7 +144,7 @@ export class ContextService {
       return { output: '', error: errorMsg };
     }
 
-    // **NEW: Argument Validation**
+    // **Argument Validation**
     const validation = CommandValidator.validateArguments(cmd, args);
     if (!validation.valid) {
       const errorMsg = `Command blocked: ${validation.errors.join('; ')}`;
@@ -242,6 +267,16 @@ export class ContextService {
     }
   }
 
+  /**
+   * Safe delete intentionally performs staged moves instead of raw rm commands.
+   * This protects against:
+   * - Cross-device/network filesystems where atomic rename can fail (fallback copies).
+   * - Windows vs. Unix path differences and case sensitivity bugs.
+   * - Accidental deletion of the staging area itself (explicit guard below).
+   * - Concurrent operations that need human-readable audit logs for recovery.
+   * Never replace this logic with a naive `mv file .not-needed/` – that pattern
+   * breaks on network mounts and loses the detailed rollback info engineers rely on.
+   */
   private async safeDeleteTargets(targets: string[]): Promise<string> {
     const projectRoot = process.cwd();
     const stagingDir = path.join(projectRoot, ".not-needed");
@@ -370,17 +405,14 @@ export class ContextService {
       const { promisify } = await import('util');
       const execFileAsync = promisify(execFile);
 
+      const env = this.buildSafeEnv();
+
       const { stdout, stderr } = await execFileAsync(cmd, args, {
         cwd: process.cwd(),
         maxBuffer: 10 * 1024 * 1024,
         timeout: 30000, // Increased to 30s
         shell: false, // CRITICAL: Never use shell mode
-        env: {
-          ...process.env,
-          // Remove dangerous env vars
-          LD_PRELOAD: undefined,
-          LD_LIBRARY_PATH: undefined,
-        }
+        env,
       });
 
       const output = stdout + (stderr || "");
@@ -411,6 +443,20 @@ export class ContextService {
       );
     }
     return normalizedResolved;
+  }
+
+  private buildSafeEnv(): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = {};
+    for (const key of ContextService.SAFE_ENV_WHITELIST) {
+      const value = process.env[key];
+      if (value !== undefined) {
+        env[key] = value;
+      }
+    }
+
+    env.NODE_ENV = process.env.NODE_ENV || 'production';
+
+    return env;
   }
 
   private tokenizeCommand(command: string): string[] {

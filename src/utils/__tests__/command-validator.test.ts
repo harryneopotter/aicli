@@ -58,4 +58,29 @@ describe('CommandValidator', () => {
       expect(result.valid).toBe(false);
     });
   });
+
+  describe('validateRawCommand', () => {
+    it('should reject multi-line commands', () => {
+      const result = CommandValidator.validateRawCommand('ls\ncat /etc/passwd');
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('Multi-line');
+    });
+
+    it('should reject subshell syntax', () => {
+      const result = CommandValidator.validateRawCommand("/exec echo $(whoami)");
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Subshell syntax $(...) detected');
+    });
+
+    it('should reject bash $\' quoting', () => {
+      const result = CommandValidator.validateRawCommand("echo $'hello;cat /etc/passwd'");
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Bash $\'...\' syntax is not allowed');
+    });
+
+    it('should accept simple commands', () => {
+      const result = CommandValidator.validateRawCommand('ls -la');
+      expect(result.valid).toBe(true);
+    });
+  });
 });

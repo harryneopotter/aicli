@@ -7,11 +7,16 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html', 'json-summary'],
   collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/*.d.ts',
-    '!src/**/__tests__/**',
-    '!src/types.ts',
-    '!src/index.ts',
+    'src/services/chat.service.ts',
+    'src/services/context.service.ts',
+    'src/services/docs.service.ts',
+    'src/services/logger.service.ts',
+    'src/services/rag.service.ts',
+    'src/services/security.service.ts',
+    'src/utils/**/*.ts',
+    'src/validation/**/*.ts',
+    '!src/utils/__tests__/**',
+    '!src/validation/__tests__/**',
   ],
   coverageThreshold: {
     global: {

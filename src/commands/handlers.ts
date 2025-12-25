@@ -106,6 +106,10 @@ export class CommandHandler {
           await this.handleSuggest(argsString);
           break;
 
+        case "debug":
+          await this.handleDebug(argsString);
+          break;
+
         case "analyze":
           await this.handleAnalyze(argsString);
           break;
@@ -387,6 +391,14 @@ export class CommandHandler {
     }
 
     await chatService.suggestCommand(task);
+  }
+
+  private async handleDebug(errorMessage: string): Promise<void> {
+    if (!errorMessage) {
+      throw new Error("Please provide an error message to debug.");
+    }
+
+    await chatService.debugError(errorMessage);
   }
 
   private async handleAnalyze(args: string): Promise<void> {
